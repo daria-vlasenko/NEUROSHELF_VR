@@ -1,111 +1,97 @@
-# NEUROSHELF — VR Simulation of Advertising Psychology & Neuromarketing
+# NEUROSHELF
 
-An immersive research instrument that measures how in-store marketing techniques shape purchasing decisions — then shows the participant their own behavioural data.
+**A VR simulation that measures how in-store marketing shapes what you buy — then shows you your own data.**
 
-> Coursework project for **3D Modelling & Virtual Reality**.
-> Specialisation: Software Engineering — Engineering Psychology of Information Technology.
-> Built across five lab assignments; currently at Lab 1.
+Unity 6.3 LTS · URP · OpenXR · C#
 
 ---
 
-## The idea
+## Why
 
-Advertising techniques work precisely because people do not notice them. Being told about them in a lecture rarely changes behaviour — the listener agrees in theory and keeps responding to the same cues in practice.
+Advertising techniques work precisely because people do not notice them. Being told about them rarely changes behaviour — the listener agrees in theory and keeps responding to the same cues in practice.
 
-NEUROSHELF closes that gap in three phases:
+NEUROSHELF closes that gap by putting the participant under the influence first, in controlled conditions, and showing them the recording afterwards. The output is their own effect size, not someone's opinion.
 
-| Phase | What happens | What is measured |
+---
+
+## How it works
+
+| Phase | What happens | What is recorded |
 |---|---|---|
-| **A — Naive run** | The participant shops from a list with a fixed budget. Manipulations are active; they are not told. | Gaze dwell time, path, pickups and returns, basket total, impulse share |
-| **B — Debrief** | A separate analytics room replays their route, lights a gaze heatmap on the shelves, and annotates every purchase with the technique that drove it. | — |
-| **C — Aware run** | The same store with manipulations disabled: neutral planogram, honest price tags, no scarcity timers. | The same metrics, compared against Phase A |
-
-The output is the participant's own effect size, not an opinion.
+| **A — Naive run** | Shopping from a list on a fixed budget. Manipulations active; participant not told. | Gaze dwell time, path, pickups and returns, basket total, impulse share |
+| **B — Debrief** | A separate analytics room replays the route, lights a gaze heatmap on the shelves, annotates every purchase with the technique that drove it. | — |
+| **C — Aware run** | Same store, manipulations disabled: neutral planogram, honest price tags, no scarcity timers. | Same metrics, compared against Phase A |
 
 ---
 
 ## Techniques modelled
 
-Each technique is an independent module, switched on or off through an experiment-condition asset — conditions are configurable without touching code.
+Each is an independent module, toggled through an experiment-condition asset. Conditions are data, not code.
 
 | Technique | Implementation | Evidence |
 |---|---|---|
-| Eye-level placement | Target brand on the 160 cm tier, competitors at 60 cm | Chandon et al. (2009); Drèze et al. (1994) |
+| Eye-level placement | Target brand at the 160 cm tier, competitors at 60 cm | Chandon et al. (2009) · Drèze et al. (1994) |
 | Shelf facings | 4 facings for the target brand vs 1 for the competitor | Chandon et al. (2009) |
 | Price anchoring | Struck-through reference price beside the actual price | Tversky & Kahneman (1974) |
-| Decoy effect | Three sizes where the middle option exists only to sell the largest | Huber, Payne & Puto (1982) |
-| Scarcity & urgency | "3 left" tags, countdown timers on promotional stands | Worchel, Lee & Adewole (1975) |
+| Decoy effect | Three sizes where the middle exists only to sell the largest | Huber, Payne & Puto (1982) |
+| Scarcity & urgency | "3 left" tags, countdown timers on promo stands | Worchel, Lee & Adewole (1975) |
 | Social proof | NPC shoppers cluster at the promoted shelf | Cialdini (1984) |
 | Music priming | Background soundtrack shifts category preference | North, Hargreaves & McKendrick (1999) |
 | Mere exposure | Brand logo shown *N* times before the shelf is reached | Zajonc (1968) |
-| Lighting accent | Warm 3000K over the impulse zone, cold 5000K over markdowns | Implemented as an experimental variable |
+| Lighting accent | Warm 3000K over impulse zone, cold 5000K over markdowns | Experimental variable |
 
 ---
 
 ## Known limitations
 
-Stated explicitly, because the project is a measurement instrument and its boundaries matter:
+Stated plainly, because this is a measurement instrument and its boundaries matter.
 
-- **No true eye tracking.** Head direction is recorded as a coarse proxy for gaze. A participant can move their eyes without turning their head; the metric is *head-gaze*, not eye-gaze.
+- **No true eye tracking.** Head direction is recorded as a coarse proxy. A participant can move their eyes without turning their head — the metric is *head-gaze*, not eye-gaze.
 - **No olfactory channel.** Scent marketing cannot be reproduced in VR.
 - **No physiological signals.** EEG and GSR are out of scope, though the analytics layer is event-driven and accepts additional sources without modification.
-- **No headset available.** Development and testing run on the XR Device Simulator — see *Running without a headset* below.
+- **Headset-free development.** Built and tested on the XR Device Simulator; see below for the calibration this required.
 
 ---
 
-## Tech stack
+## Scene
 
-| | |
-|---|---|
-| Engine | Unity 6.3 LTS (6000.3.24f1) |
-| Render pipeline | Universal Render Pipeline |
-| Language | C# |
-| XR | OpenXR, HTC Vive Controller Profile |
-| Interaction | XR Interaction Toolkit 3.3.2 |
-| Headless testing | XR Device Simulator |
-| 3D authoring | Blender |
-
-URP was chosen over the Built-in pipeline because the development machine has integrated graphics and no discrete GPU — URP is the pipeline Unity targets at exactly this hardware class, and it is the standard pipeline for VR.
-
----
-
-## Running without a headset
-
-No HTC Vive is available, so the project is driven by the **XR Device Simulator** from the XR Interaction Toolkit samples. The interaction logic is real; only the input source is substituted.
-
-1. Open `Assets/_Project/Scenes/02_Store.unity`
-2. Press **Play**
-3. Controls — keyboard layout must be **English**:
-
-| Key | Action |
-|---|---|
-| `Tab` | Cycle control: head → left controller → right controller |
-| `W A S D` | Move |
-| Mouse | Look / aim controller |
-| `Shift` / `Space` | Down / up |
-
-### Eye-height calibration
-
-The simulator does not report an anthropometrically correct head height. With the XR Origin defaults the eye line landed on the **110 cm** shelf tier, which meant the eye-level effect — the central independent variable of this project — did not reproduce at all.
-
-`Camera Y Offset` on the XR Origin is therefore calibrated so that the camera's world Y reads **1.65 m** in Play mode, matching the 165–175 cm stature the scene is designed around. The value is verified by reading the Main Camera's world position, not by eye.
-
-This is worth knowing before changing the XR Origin: the shelf tier heights are experimental parameters, and they are only meaningful relative to a correct eye height.
-
----
-
-## Scene layout
-
-Built to real-world scale — 1 unit = 1 metre. Proportions are not decoration here; the whole experiment rests on them.
+Built at real-world scale — 1 unit = 1 metre. The proportions are the experiment, not decoration.
 
 | Element | Dimensions |
 |---|---|
 | Sales floor | 12 × 8 × 3 m |
 | Shelf unit (×4) | 2.4 × 0.6 × 1.8 m |
-| Shelf tiers | **0.60 m** (requires bending) · **1.10 m** (mid) · **1.60 m** (eye level) |
+| Shelf tiers | **0.60 m** requires bending · **1.10 m** mid · **1.60 m** eye level |
 | Aisle between rows | 2.4 m clear — room-scale turning space |
 | Checkout counter | 2 × 1.1 × 0.8 m |
 | Player spawn | (0, 0, −3.2), facing the sales floor |
+
+---
+
+## Texture atlas
+
+A single 2048×2048 atlas on a 4×4 grid carries the entire product range plus four environment materials — one material for everything on the shelves.
+
+| # | Content | # | Content |
+|---|---|---|---|
+| 0–3 | Metal · Plastic · Wood · Floor tile | 8–11 | KRISP · NORDA · GRANO · FERRO |
+| 4–7 | AURA · VOLTA · NUBO · ZEST | 12–15 | MIRA · OKTA · LUMEN · PURA |
+
+Each cell occupies a 0.25 × 0.25 UV range, giving 512 px per product — enough for the label to read at arm's length, which is as close as anyone gets to a shelf in this scene.
+
+Maps: `Albedo` (sRGB), `Normal`, and `MetallicSmoothness` — metallic in RGB, smoothness in alpha, as URP expects. Separate `Metallic` and `Roughness` maps are kept for documentation.
+
+**All brands are fictional.** No real trademarks are used. Package design is itself an experimental variable: colour, contrast and price-font size affect shelf salience.
+
+---
+
+## Tooling
+
+Two scripts replace the manual click-work and make the asset pipeline reproducible.
+
+**`NEUROSHELF_Blender_LR2.py`** — builds 12 packaging models at real dimensions, runs Smart UV Project with a 0.01 island margin on each, packs every unwrap into its assigned atlas cell by UV arithmetic, and exports a single FBX with a selection filter.
+
+**`NeuroshelfMaterialSetup.cs`** — an Editor menu that sets correct import settings per texture (sRGB for colour, linear for data, Normal Map type, Clamp wrap for atlas safety), builds the URP Lit material, wires the maps into the right slots, applies it across a hierarchy, and reports material and renderer counts for draw-call analysis.
 
 ---
 
@@ -122,43 +108,63 @@ Assets/_Project/
 │   ├── Analytics/      gaze, path, purchase logging → CSV export
 │   ├── NPC/            shopper agents, IK promoter
 │   └── UI/             wrist panel, debrief screens, heatmap
-├── Prefabs/
-├── Art/
+├── Art/            Models · Textures
 ├── Materials/
+├── Prefabs/
 └── Configs/        experiment conditions, planograms, product catalogue
 ```
 
-Two decisions carry the design:
+Two decisions carry the design.
 
-**Experiment conditions live in data, not code.** A condition asset lists which manipulators are active, which planogram to load, and which audio and lighting to apply. Switching between the manipulated and neutral runs swaps one asset — no duplicated scenes, no branching logic.
+**Experiment conditions live in data, not code.** A condition asset lists which manipulators are active, which planogram to load, which audio and lighting to apply. Switching between the manipulated and neutral runs swaps one asset — no duplicated scenes, no branching logic.
 
-**Analytics is event-driven and one-directional.** The session recorder subscribes to interaction events and never calls back into gameplay. Logging can be removed entirely without affecting the simulation, and new data sources attach through the same subscription.
+**Analytics is event-driven and one-directional.** The session recorder subscribes to interaction events and never calls back into gameplay. Logging can be removed entirely without affecting the simulation; new data sources attach through the same subscription.
 
 ---
 
-## Progress
+## Running without a headset
 
-| Lab | Scope | Status |
+No HTC Vive on hand, so the project runs on the **XR Device Simulator** from the XR Interaction Toolkit samples. The interaction logic is real; only the input source is substituted.
+
+Open `Assets/_Project/Scenes/02_Store.unity`, press Play. Keyboard layout must be English.
+
+| Key | Action |
+|---|---|
+| `Tab` | Cycle: head → left controller → right controller |
+| `W A S D` | Move |
+| Mouse | Look / aim |
+| `Shift` / `Space` | Down / up |
+
+### Eye-height calibration
+
+The simulator does not report an anthropometrically correct head height. At XR Origin defaults the eye line landed on the **110 cm** tier — meaning the eye-level effect, the central independent variable of this project, did not reproduce at all.
+
+`Camera Y Offset` is therefore calibrated so the camera's world Y reads **1.65 m** in Play mode, matching the 165–175 cm stature the scene is designed around. Verified by reading the Main Camera's world position, not by eye.
+
+Worth knowing before touching the XR Origin: tier heights are experimental parameters and only mean anything relative to a correct eye height.
+
+---
+
+## Roadmap
+
+| Stage | Scope | Status |
 |---|---|---|
-| **1** | Scene architecture, blockout geometry, hierarchy, XR setup | ✅ Done |
-| 2 | UV unwrapping, texture atlas, PBR materials | Planned |
-| 3 | Lighting architecture, lightmap baking | Planned |
-| 4 | Skeletal animation, Animation Rigging / IK | Planned |
+| **1** | Environment, blockout geometry, scene hierarchy, XR foundation | ✅ Done |
+| **2** | UV pipeline, texture atlas, PBR materials, Editor tooling | ✅ Done |
+| 3 | Lighting architecture, lightmap baking, VR performance budget | In progress |
+| 4 | Shopper agents, skeletal animation, procedural IK | Planned |
 | 5 | Grab, ray and socket interaction | Planned |
-
-### Lab 1 — what was built
-
-- Enclosed room from primitives with correct normal orientation. The ceiling is a `Plane`, rotated 180° on X so its normal faces into the room — without this the ceiling is invisible from inside.
-- Four shelf units at 1:1 scale, assembled as a prefab, arranged in two facing rows.
-- Scene hierarchy grouped under `Environment` → `Structure` / `Shelves` / `Checkout`.
-- OpenXR enabled with the HTC Vive Controller Profile; XR Interaction Toolkit installed; XR Origin placed at the entrance.
-- Eye height calibrated and verified numerically (see above).
+| 6 | Analytics layer, CSV export, debrief room | Planned |
 
 ---
 
-## Note on brands
+## Third-party assets
 
-Every brand, logo, package design and price in this project is fictional. No real trademarks are used. Third-party assets are CC0.
+All third-party resources are **CC0**. Attribution is given as a matter of practice, not licence requirement.
+
+[Kenney](https://kenney.nl/assets) · [Quaternius](https://quaternius.itch.io/) · [Poly Haven](https://polyhaven.com/textures) · [ambientCG](https://ambientcg.com/)
+
+Original to this project: all packaging models, the texture atlas and every map in it, label design, and both automation scripts.
 
 ---
 
