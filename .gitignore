@@ -1,0 +1,79 @@
+# ============================================
+# Unity — основное
+# ============================================
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+
+# Плагин Rider, генерируется автоматически
+/[Aa]ssets/Plugins/Editor/JetBrains*
+
+# ============================================
+# IDE и решения (генерируются Unity заново)
+# ============================================
+.vs/
+.idea/
+.gradle/
+.vsconfig
+ExportedObj/
+.consulo/
+*.csproj
+*.unityproj
+*.sln
+*.slnx
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# ============================================
+# Отчёты о сбоях
+# ============================================
+sysinfo.txt
+crashlytics-build.properties
+
+# ============================================
+# Сборки
+# ============================================
+*.apk
+*.aab
+*.unitypackage
+*.app
+*.exe
+
+# ============================================
+# Addressables
+# ============================================
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
+/[Aa]ssets/[Ss]treamingAssets/aa.meta
+/[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# ============================================
+# Мусор ОС
+# ============================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================
+# Данные сессий симуляции (сырые логи не коммитим)
+# ============================================
+/[Aa]ssets/[Ss]treamingAssets/SessionLogs/
+*.session.csv

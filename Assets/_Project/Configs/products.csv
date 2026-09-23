@@ -1,0 +1,13 @@
+cell,brand,category,volume,price,anchor_price,package,tier_A,tier_C,is_impulse
+4,AURA,Water,0.5 L,45,,pet_bottle,low,mid,0
+5,VOLTA,Energy,0.45 L,120,159,can,eye,low,1
+6,NUBO,Juice,0.9 L,145,189,pet_bottle,mid,eye,0
+7,ZEST,Soda,0.33 L,79,,can,mid,low,1
+8,KRISP,Chips,150 g,149,199,carton,mid,eye,1
+9,NORDA,Biscuits,200 g,129,,carton,low,mid,1
+10,GRANO,Oat flakes,500 g,189,239,carton,low,eye,0
+11,FERRO,Coffee,250 g,449,599,tin,eye,low,0
+12,MIRA,Milk,1 L,98,,tetra,low,mid,0
+13,OKTA,Tea,100 g,219,,carton,mid,low,0
+14,LUMEN,Hand soap,300 mL,189,249,pet_bottle,mid,low,0
+15,PURA,Shampoo,400 mL,329,449,pet_bottle,eye,mid,0
