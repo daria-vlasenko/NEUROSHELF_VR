@@ -7,11 +7,13 @@ using UnityEngine.XR;
 
 // Замер частоты кадров: 3 с прогрева, 10 с записи, затем файл с итогами
 // и автоматический выход из Play Mode. Добавляется в сцену из меню
-// NEUROSHELF → Свет → 5.4, вручную вешать не нужно.
+// NEUROSHELF → Свет → 5.4 (или Анимация → 6.8), вручную вешать не нужно.
 public class FpsProbe : MonoBehaviour
 {
     public float warmup = 3f;
     public float duration = 10f;
+    public string reportFolder = "ЛР3";
+    public string fileName = "09_Замер_FPS.txt";
     const float TargetMs = 1000f / 90f;   // 11.1 мс — бюджет кадра для 90 FPS
 
     float t;
@@ -44,6 +46,9 @@ public class FpsProbe : MonoBehaviour
         sb.AppendLine($"Дата: {System.DateTime.Now:yyyy-MM-dd HH:mm}");
         sb.AppendLine($"GPU: {SystemInfo.graphicsDeviceName} · CPU: {SystemInfo.processorType}");
         sb.AppendLine($"Окно: {Screen.width}×{Screen.height} · XR-устройство активно: {XRSettings.isDeviceActive}");
+        var skinned = FindObjectsByType<SkinnedMeshRenderer>(FindObjectsSortMode.None).Length;
+        var animators = FindObjectsByType<Animator>(FindObjectsSortMode.None).Length;
+        sb.AppendLine($"В сцене: скиннинг-мешей {skinned}, Animator-ов {animators}");
         sb.AppendLine($"Кадров: {s.Count} за {duration:F0} с");
         sb.AppendLine($"Средний кадр: {avg:F2} мс → {1000f / avg:F1} FPS");
         sb.AppendLine($"Медиана: {med:F2} мс → {1000f / med:F1} FPS");
@@ -51,9 +56,9 @@ public class FpsProbe : MonoBehaviour
         sb.AppendLine($"Бюджет 90 FPS = {TargetMs:F1} мс; кадров сверх бюджета: {over} ({100f * over / s.Count:F1}%)");
         sb.AppendLine("Примечание: замер в Game View редактора, без шлема. Редактор добавляет свои накладные расходы.");
 
-        var dir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "..", "Отчёты", "ЛР3"));
+        var dir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "..", "Отчёты", reportFolder));
         Directory.CreateDirectory(dir);
-        var path = Path.Combine(dir, "09_Замер_FPS.txt");
+        var path = Path.Combine(dir, fileName);
         File.WriteAllText(path, sb.ToString(), new UTF8Encoding(true));
         Debug.Log("[NEUROSHELF] " + path + "\n" + sb);
     }
