@@ -77,3 +77,10 @@ desktop.ini
 # ============================================
 /[Aa]ssets/[Ss]treamingAssets/SessionLogs/
 *.session.csv
+
+# Mixamo characters/animations are not redistributed as standalone files.
+# Download them per 09_ЛР4_что_сделать_руками.md, then run NEUROSHELF > Анимация > 6.0
+/Assets/_Project/Art/Characters/Mixamo/
+/Assets/_Project/Art/Characters/Mixamo.meta
+/Assets/_Project/Art/Characters/Simplified/
+/Assets/_Project/Art/Characters/Simplified.meta

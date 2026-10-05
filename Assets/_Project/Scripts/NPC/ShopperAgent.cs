@@ -67,9 +67,9 @@ public class ShopperAgent : MonoBehaviour
 
     void OnCondition(ExperimentConditionSO c)
     {
-        // не уходят все одновременно — разброс до 2 с
-        browsing = true;
-        browseUntil = Time.time + Random.Range(0f, 2f);
+        // не уходят все одновременно — разброс до 3 с
+        if (!browsing) return;   // кто уже идёт, дойдёт и выберет заново по новому условию
+        browseUntil = Mathf.Min(browseUntil, Time.time + Random.Range(0f, 3f));
     }
 
     void Update()
@@ -105,13 +105,18 @@ public class ShopperAgent : MonoBehaviour
         bool crowd = c != null && c.socialProofCrowd && promo != null;
         bool atPromo = crowd && Random.value < c.crowdShareAtPromo;
 
-        var pool = slots.FindAll(s => s.owner == null && s != current &&
-                                      (atPromo ? s.shelf == promo : (!crowd || s.shelf != promo)));
-        if (pool.Count == 0) pool = slots.FindAll(s => s.owner == null && s != current);
-        if (pool.Count == 0) { browseUntil = Time.time + 2f; return; }
-
+        // своё место освобождаем до выбора: иначе, когда вся толпа занимает места у одной полки,
+        // свободных мест там «нет» и все разом уходят к другим полкам
+        var prev = current;
         Release();
+        bool Fits(Slot s) => atPromo ? s.shelf == promo : (!crowd || s.shelf != promo);
+        var pool = slots.FindAll(s => s.owner == null && s != prev && Fits(s));
+        if (pool.Count == 0 && prev != null && Fits(prev)) pool.Add(prev);           // остаться на месте
+        if (pool.Count == 0) pool = slots.FindAll(s => s.owner == null);
+        if (pool.Count == 0) { if (prev != null) Claim(prev); browseUntil = Time.time + 2f; return; }
+
         Claim(pool[Random.Range(0, pool.Count)]);
+        if (current == prev) { browsing = true; browseUntil = Time.time + Random.Range(browseSeconds.x, browseSeconds.y); return; }
         agent.SetDestination(current.pos);
         browsing = false;
     }
@@ -123,11 +128,17 @@ public class ShopperAgent : MonoBehaviour
     static void BuildSlots()
     {
         slots = new List<Slot>();
+        var promoters = FindObjectsByType<PromoterIK>(FindObjectsSortMode.None);
         foreach (var t in FindObjectsByType<Transform>(FindObjectsSortMode.None))
         {
             if (!t.name.StartsWith("Shelf_0")) continue;
             foreach (var p in SlotPositions(t))
             {
+                // не встаём вплотную к промоутеру: личная дистанция ≥ 1 м
+                bool tooClose = false;
+                foreach (var pr in promoters)
+                { var d = pr.transform.position - p; d.y = 0; if (d.magnitude < 1f) tooClose = true; }
+                if (tooClose) continue;
                 var q = p;
                 if (NavMesh.SamplePosition(q, out var hit, 0.4f, NavMesh.AllAreas)) q = hit.position;
                 slots.Add(new Slot { pos = q, face = -ShelfFront(t), shelf = t });

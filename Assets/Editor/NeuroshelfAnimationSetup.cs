@@ -61,8 +61,8 @@ public static class NeuroshelfAnimationSetup
 
     // Раскладка (зал 12 × 8 м, центр в 0; продвигаемый стеллаж Shelf_03 x −2.4…0, z −1.8…−1.2)
     const int ShopperCount = 4;   // + 1 промоутер = 5 скиннинг-мешей на сцену
-    public static readonly Vector3 PromoterPos = new Vector3(-2.85f, 0f, -0.40f);  // у торца Shelf_03
-    public static readonly Vector3 PlayerViewPos = new Vector3(-1.20f, 0f, 0.00f); // проход перед полкой
+    public static readonly Vector3 PromoterPos = new Vector3(-2.75f, 0f, 0.45f);   // у торца прохода, напротив Shelf_03
+    public static readonly Vector3 PlayerViewPos = new Vector3(0.60f, 0f, 0.00f);  // центр прохода, в стороне от толпы
     static readonly Vector3 StandPos = new Vector3(-4.40f, 0f, -2.60f);            // путь от входа
     static readonly Vector3 CoolerPos = new Vector3(-5.68f, 0f, 1.20f);            // у западной стены
 
@@ -77,6 +77,7 @@ public static class NeuroshelfAnimationSetup
     public static void FullCycle()
     {
         if (!ImportRig()) return;
+        SimplifyCharacters();
         BuildControllers();
         BuildConditions();
         BuildProps();
@@ -84,6 +85,24 @@ public static class NeuroshelfAnimationSetup
         Verify();
         NeuroshelfAnimCapture.Start();
     }
+
+    [MenuItem(Menu + "6.01 Установить Mesh Simplifier (упрощение персонажей)", priority = 199)]
+    public static void InstallSimplifier()
+    {
+        var req = UnityEditor.PackageManager.Client.Add("https://github.com/Whinarn/UnityMeshSimplifier.git");
+        EditorApplication.CallbackFunction cb = null;
+        cb = () =>
+        {
+            if (!req.IsCompleted) return;
+            EditorApplication.update -= cb;
+            if (req.Status == UnityEditor.PackageManager.StatusCode.Success) Log("Mesh Simplifier установлен: " + req.Result.version);
+            else Debug.LogError("[NEUROSHELF] Ошибка установки Mesh Simplifier: " + req.Error?.message);
+        };
+        EditorApplication.update += cb;
+    }
+
+    [MenuItem(Menu + "6.15 Упростить меши персонажей (LOD для встроенной графики)", priority = 201)]
+    public static void SimplifyMenu() => SimplifyCharacters();
 
     [MenuItem(Menu + "6.1 Импорт: Humanoid-риг, клипы, проверка весов", priority = 201)]
     public static void ImportMenu() => ImportRig();
@@ -224,8 +243,14 @@ public static class NeuroshelfAnimationSetup
         var sb = new StringBuilder();
         var go = AssetDatabase.LoadAssetAtPath<GameObject>(fbx);
         foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            if (smr.sharedMesh != null) sb.Append(WeightReportMesh($"{Path.GetFileNameWithoutExtension(fbx)}/{smr.name}", smr.sharedMesh, smr.bones.Length));
+        return sb.ToString();
+    }
+
+    static string WeightReportMesh(string label, Mesh m, int boneCount)
+    {
+        var sb = new StringBuilder();
         {
-            var m = smr.sharedMesh; if (m == null) continue;
             var perVertex = m.GetBonesPerVertex();
             var weights = m.GetAllBoneWeights();
             int verts = m.vertexCount, maxInf = 0, badSum = 0, zero = 0, rigid = 0, idx = 0;
@@ -245,11 +270,64 @@ public static class NeuroshelfAnimationSetup
                 if (top > 0.999f) rigid++;
             }
             int tris = 0; for (int s = 0; s < m.subMeshCount; s++) tris += (int)m.GetIndexCount(s) / 3;
-            sb.AppendLine($"  {Path.GetFileNameWithoutExtension(fbx)}/{smr.name}: вершин {verts}, треугольников {tris}, " +
-                          $"костей {smr.bones.Length} (с весами {used.Count}), макс. костей на вершину {maxInf}");
+            sb.AppendLine($"  {label}: вершин {verts}, треугольников {tris}, " +
+                          $"костей {boneCount} (с весами {used.Count}), макс. костей на вершину {maxInf}");
             sb.AppendLine($"    без веса: {zero} · сумма весов ≠ 1: {badSum} · жёстко на одной кости: {100f * rigid / Mathf.Max(1, verts):F0}%");
         }
         return sb.ToString();
+    }
+
+    // ===================== 6.15 УПРОЩЕНИЕ МЕШЕЙ =====================
+    // Y Bot / X Bot из Mixamo — 49–55 тыс. треугольников. Для 5 NPC на встроенной графике это
+    // 270 тыс. треугольников скиннинга. Упрощаем сетку, сохраняя веса вершин и bindposes;
+    // исходные FBX не меняются (проверка Weight Paint в Blender идёт по оригиналу).
+    const string SimpleDir = "Assets/_Project/Art/Characters/Simplified";
+    static readonly Dictionary<string, float> SimplifyQuality = new Dictionary<string, float>
+    { { "Surface", 0.30f }, { "Joints", 0.20f } };
+
+    static string SimplePath(string fbx, string smr) => $"{SimpleDir}/{Path.GetFileNameWithoutExtension(fbx)}_{smr}_LOW.asset";
+
+    public static bool SimplifyCharacters()
+    {
+        var t = AppDomain.CurrentDomain.GetAssemblies()
+            .Select(a => a.GetType("UnityMeshSimplifier.MeshSimplifier")).FirstOrDefault(x => x != null);
+        if (t == null) { Debug.LogWarning("[NEUROSHELF] Mesh Simplifier не установлен (6.01) — персонажи остаются исходными."); return false; }
+        Directory.CreateDirectory(SimpleDir);
+        var sb = new StringBuilder("Упрощение мешей персонажей:\n");
+        foreach (var fbx in new[] { ShopperFbx, PromoterFbx })
+        {
+            var go = Load<GameObject>(fbx); if (go == null) continue;
+            foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                var src = smr.sharedMesh; if (src == null) continue;
+                float q = SimplifyQuality.FirstOrDefault(kv => smr.name.Contains(kv.Key)).Value;
+                if (q <= 0f) q = 0.3f;
+                var ms = Activator.CreateInstance(t);
+                t.GetMethod("Initialize", new[] { typeof(Mesh) }).Invoke(ms, new object[] { src });
+                t.GetMethod("SimplifyMesh", new[] { typeof(float) }).Invoke(ms, new object[] { q });
+                var low = (Mesh)t.GetMethod("ToMesh", Type.EmptyTypes).Invoke(ms, null);
+                low.name = src.name + "_LOW";
+                low.bindposes = src.bindposes;
+                low.RecalculateBounds();
+                Replace(low, SimplePath(fbx, smr.name));
+                sb.AppendLine($"  {Path.GetFileNameWithoutExtension(fbx)}/{smr.name}: {Tris(src)} → {Tris(low)} треугольников (качество {q:P0}), " +
+                              $"вершин {src.vertexCount} → {low.vertexCount}");
+            }
+        }
+        AssetDatabase.SaveAssets();
+        Log(sb.ToString());
+        return true;
+    }
+
+    static int Tris(Mesh m) { int n = 0; for (int i = 0; i < m.subMeshCount; i++) n += (int)m.GetIndexCount(i) / 3; return n; }
+
+    static void UseSimplified(GameObject g, string fbx)
+    {
+        foreach (var r in g.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+        {
+            var low = Load<Mesh>(SimplePath(fbx, r.name));
+            if (low != null) r.sharedMesh = low;
+        }
     }
 
     // ===================== 6.2 ANIMATOR CONTROLLERS =====================
@@ -291,6 +369,9 @@ public static class NeuroshelfAnimationSetup
         ac.AddParameter("Point", AnimatorControllerParameterType.Trigger);
         sm = ac.layers[0].stateMachine;
         var pIdle = sm.AddState("Idle", new Vector3(300, 100)); pIdle.motion = idle;
+        // Write Defaults выключен: иначе Animator каждый кадр возвращает вес ограничений
+        // Animation Rigging к значению по умолчанию и скрипт не может ими управлять
+        pIdle.writeDefaultValues = false;
         sm.defaultState = pIdle;
 
         ac.AddLayer("Gesture");
@@ -306,8 +387,60 @@ public static class NeuroshelfAnimationSetup
         Transition(gEmpty, gPoint, 0.25f).AddCondition(AnimatorConditionMode.If, 0, "Point");
         Transition(gPoint, gEmpty, 0.4f).AddCondition(AnimatorConditionMode.IfNot, 0, "PlayerNear");
 
+        // Слой «IK Weights»: вес ограничений Animation Rigging задаётся кривыми клипов.
+        // Animator сам владеет этим свойством, поэтому управлять им надо через граф, а не из скрипта;
+        // переход 0.4 с даёт плавное нарастание IK без отдельного кода.
+        var ikOn = new AnimationClip { name = "IK_Point_On" };
+        ikOn.SetCurve("Rig_Promoter/IK_RightArm", typeof(TwoBoneIKConstraint), "m_Weight", AnimationCurve.Constant(0f, 0.1f, 1f));
+        ikOn.SetCurve("Rig_Promoter/Aim_Head", typeof(MultiAimConstraint), "m_Weight", AnimationCurve.Constant(0f, 0.1f, 0.85f));
+        var ikOff = new AnimationClip { name = "IK_Point_Off" };
+        ikOff.SetCurve("Rig_Promoter/IK_RightArm", typeof(TwoBoneIKConstraint), "m_Weight", AnimationCurve.Constant(0f, 0.1f, 0f));
+        ikOff.SetCurve("Rig_Promoter/Aim_Head", typeof(MultiAimConstraint), "m_Weight", AnimationCurve.Constant(0f, 0.1f, 0f));
+        Replace(ikOn, AnimDir + "/IK_Point_On.anim"); Replace(ikOff, AnimDir + "/IK_Point_Off.anim");
+        var noBody = new AvatarMask();
+        for (int i = 0; i < (int)AvatarMaskBodyPart.LastBodyPart; i++) noBody.SetHumanoidBodyPartActive((AvatarMaskBodyPart)i, false);
+        Replace(noBody, AnimDir + "/AM_NoBody.mask");
+        ac.AddLayer("IK Weights");
+        layers = ac.layers;
+        layers[2].avatarMask = Load<AvatarMask>(AnimDir + "/AM_NoBody.mask");
+        layers[2].defaultWeight = 1f;
+        ac.layers = layers;
+        var ism = ac.layers[2].stateMachine;
+        var iOff = ism.AddState("IK_Off", new Vector3(300, 100)); iOff.motion = Load<AnimationClip>(AnimDir + "/IK_Point_Off.anim"); iOff.writeDefaultValues = false;
+        var iOn = ism.AddState("IK_On", new Vector3(560, 100)); iOn.motion = Load<AnimationClip>(AnimDir + "/IK_Point_On.anim"); iOn.writeDefaultValues = false;
+        ism.defaultState = iOff;
+        Transition(iOff, iOn, 0.4f).AddCondition(AnimatorConditionMode.If, 0, "PlayerNear");
+        Transition(iOn, iOff, 0.4f).AddCondition(AnimatorConditionMode.IfNot, 0, "PlayerNear");
+
         AssetDatabase.SaveAssets();
+        RelinkControllers();
         Log("Animator Controllers: AC_Shopper, AC_Promoter, AC_Door, AC_AdStand → " + AnimDir);
+    }
+
+    // Контроллеры пересоздаются с нуля — объекты в сцене и префаб надо привязать к новым файлам
+    static void RelinkControllers()
+    {
+        int n = 0;
+        void Set(Animator a, string name)
+        {
+            if (a == null) return;
+            a.runtimeAnimatorController = Load<RuntimeAnimatorController>($"{AnimDir}/{name}.controller");
+            EditorUtility.SetDirty(a); n++;
+        }
+        foreach (var d in Object.FindObjectsByType<ProximityDoor>(FindObjectsSortMode.None)) Set(d.animator, "AC_Door");
+        foreach (var d in Object.FindObjectsByType<AdStandMotion>(FindObjectsSortMode.None)) Set(d.animator, "AC_AdStand");
+        foreach (var d in Object.FindObjectsByType<ShopperAgent>(FindObjectsSortMode.None)) Set(d.animator, "AC_Shopper");
+        foreach (var d in Object.FindObjectsByType<PromoterIK>(FindObjectsSortMode.None)) Set(d.animator, "AC_Promoter");
+        var prefab = PrefabDir + "/NPC_Shopper.prefab";
+        if (Load<GameObject>(prefab) != null)
+        {
+            var root = PrefabUtility.LoadPrefabContents(prefab);
+            var a = root.GetComponent<Animator>();
+            if (a != null) a.runtimeAnimatorController = Load<RuntimeAnimatorController>(AnimDir + "/AC_Shopper.controller");
+            PrefabUtility.SaveAsPrefabAsset(root, prefab);
+            PrefabUtility.UnloadPrefabContents(root);
+        }
+        if (n > 0) SaveScene();
     }
 
     static void BuildDoorController()
@@ -471,6 +604,8 @@ public static class NeuroshelfAnimationSetup
         var sa = stand.AddComponent<Animator>();
         sa.runtimeAnimatorController = Load<RuntimeAnimatorController>(AnimDir + "/AC_AdStand.controller");
         stand.AddComponent<AdStandMotion>().animator = sa;
+        // основание стенда ниже нижнего ряда проб (0.3 м) — свет берём с середины высоты
+        ProbeAnchor(stand.transform, new Vector3(0, 1.2f, 0));
 
         foreach (var r in root.GetComponentsInChildren<Renderer>()) DynamicRenderer(r);
         Log("Анимированные объекты: Vitrine_Cooler (дверца по триггерам Open/Close), AdStand_VOLTA (вращение 45°/с).");
@@ -562,7 +697,7 @@ public static class NeuroshelfAnimationSetup
         // --- Покупатели: префаб + 4 экземпляра, стартуют у продвигаемого стеллажа
         var shopperPrefab = MakeShopperPrefab(shopperModel, acShopper, joints, blob);
         var shelf = GameObject.Find("Shelf_03").transform;
-        var slots = ShopperAgent.SlotPositions(shelf).ToArray();
+        var slots = ShopperAgent.SlotPositions(shelf).Where(p => Vector3.Distance(new Vector3(p.x, 0, p.z), PromoterPos) >= 1f).ToArray();
         var shoppers = new GameObject("Shoppers").transform; shoppers.SetParent(root.transform);
         for (int i = 0; i < ShopperCount; i++)
         {
@@ -587,6 +722,10 @@ public static class NeuroshelfAnimationSetup
         po.AddComponent<PlayerObstacle>();
 
         SaveScene();
+        RelinkControllers();   // контроллер префаба-варианта FBX до экземпляров не доходит — назначаем явно
+        foreach (var sa in Object.FindObjectsByType<ShopperAgent>(FindObjectsSortMode.None))
+            if (sa.animator == null || sa.animator.runtimeAnimatorController == null)
+                Debug.LogError($"[NEUROSHELF] {sa.name}: нет Animator Controller");
         Log($"NPC: {ShopperCount} покупателя + промоутер, NavMesh → {NavMeshPath}");
         return true;
     }
@@ -598,6 +737,7 @@ public static class NeuroshelfAnimationSetup
     {
         var g = (GameObject)PrefabUtility.InstantiatePrefab(model);
         g.name = "NPC_Shopper";
+        UseSimplified(g, ShopperFbx);
         var anim = SetupCharacter(g, ac, blob);
         var agent = g.AddComponent<NavMeshAgent>();
         agent.radius = NavAgentRadius; agent.height = 1.75f; agent.speed = 1.1f;
@@ -640,6 +780,7 @@ public static class NeuroshelfAnimationSetup
     {
         var g = (GameObject)PrefabUtility.InstantiatePrefab(model, root);
         g.name = "NPC_Promoter";
+        UseSimplified(g, PromoterFbx);
         var toPlayer = PlayerViewPos - PromoterPos; toPlayer.y = 0;
         g.transform.SetPositionAndRotation(PromoterPos, Quaternion.LookRotation(toPlayer));
         var anim = SetupCharacter(g, ac, blob);
@@ -659,15 +800,17 @@ public static class NeuroshelfAnimationSetup
 
         // Two Bone IK: плечо → локоть → кисть, цель — маленький куб, подсказка — точка локтя
         var ikGo = new GameObject("IK_RightArm"); ikGo.transform.SetParent(rigGo.transform, false);
+        // цели вне иерархии персонажа: их двигает скрипт, Animator не должен их перезаписывать
+        var targets = new GameObject("Promoter_IK_Targets").transform; targets.SetParent(root, false);
         var target = GameObject.CreatePrimitive(PrimitiveType.Cube);
         target.name = "IK_RightArm_Target"; Object.DestroyImmediate(target.GetComponent<Collider>());
-        target.transform.SetParent(ikGo.transform, false);
+        target.transform.SetParent(targets, false);
         target.transform.localScale = Vector3.one * 0.05f;
         target.transform.SetPositionAndRotation(hand.position, hand.rotation);
         var tr = target.GetComponent<MeshRenderer>();
         tr.sharedMaterial = Mat("M_FX_IKTarget", new Color(0.1f, 0.9f, 0.3f), unlit: true);
         tr.shadowCastingMode = ShadowCastingMode.Off; tr.enabled = false;
-        var hint = new GameObject("IK_RightArm_Hint").transform; hint.SetParent(ikGo.transform, false);
+        var hint = new GameObject("IK_RightArm_Hint").transform; hint.SetParent(targets, false);
         hint.position = elbow.position - g.transform.up * 0.2f;
         var ik = ikGo.AddComponent<TwoBoneIKConstraint>();
         var d = ik.data;
@@ -677,7 +820,7 @@ public static class NeuroshelfAnimationSetup
 
         // Multi-Aim: голова смотрит на игрока; ось взгляда подбирается по фактической ориентации кости
         var aimGo = new GameObject("Aim_Head"); aimGo.transform.SetParent(rigGo.transform, false);
-        var look = new GameObject("LookAt_Player").transform; look.SetParent(rigGo.transform, false);
+        var look = new GameObject("LookAt_Player").transform; look.SetParent(targets, false);
         look.position = head.position + g.transform.forward * 2f;
         var aim = aimGo.AddComponent<MultiAimConstraint>();
         var ad = aim.data;
@@ -690,7 +833,7 @@ public static class NeuroshelfAnimationSetup
         aim.data = ad; aim.weight = 0f;
 
         // Луч «кисть → товар» — только для кадров отчёта
-        var rayGo = new GameObject("PointerRay"); rayGo.transform.SetParent(rigGo.transform, false);
+        var rayGo = new GameObject("PointerRay"); rayGo.transform.SetParent(targets, false);
         var lr = rayGo.AddComponent<LineRenderer>();
         lr.positionCount = 2; lr.widthMultiplier = 0.012f; lr.useWorldSpace = true;
         lr.sharedMaterial = Mat("M_FX_PointerRay", new Color(0.1f, 0.9f, 0.3f), unlit: true);
@@ -779,6 +922,11 @@ public static class NeuroshelfAnimationSetup
         sb.AppendLine();
         sb.AppendLine("2. ВЕСА ВЕРШИН (численно)");
         foreach (var p in new[] { ShopperFbx, PromoterFbx }) if (File.Exists(Path.GetFullPath(p))) sb.Append(WeightReport(p));
+        sb.AppendLine("  после упрощения (то, что реально стоит в сцене):");
+        foreach (var smr in Object.FindObjectsByType<SkinnedMeshRenderer>(FindObjectsSortMode.None)
+                     .Where(x => x.sharedMesh != null && x.sharedMesh.name.EndsWith("_LOW"))
+                     .GroupBy(x => x.sharedMesh).Select(g => g.First()))
+            sb.Append(WeightReportMesh(smr.sharedMesh.name, smr.sharedMesh, smr.bones.Length));
         sb.AppendLine();
 
         sb.AppendLine("3. ГРАФЫ СОСТОЯНИЙ (Animator Controller)");
@@ -983,13 +1131,17 @@ public static class NeuroshelfAnimCapture
 
         Add(0f, "подготовка", () =>
         {
+            // Окно Game может быть скрыто за Scene View — тогда Unity считает NPC невидимыми и
+            // режим Cull Update Transforms замораживает их в T-позе. На время съёмки — анимировать всегда.
+            foreach (var an in Object.FindObjectsByType<Animator>(FindObjectsSortMode.None))
+                an.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             if (ctx != null && condV != null) ctx.SetCondition(condV);
             // игрок «встаёт» в проход перед продвигаемым стеллажом, лицом к промоутеру и полке.
             // Двигается только XR Origin целиком, Camera Y Offset не трогается.
             if (origin != null)
             {
                 origin.position = NeuroshelfAnimationSetup.PlayerViewPos;
-                var look = new Vector3(-2.5f, 0, -1.1f) - NeuroshelfAnimationSetup.PlayerViewPos;
+                var look = new Vector3(-2.4f, 0, -0.6f) - NeuroshelfAnimationSetup.PlayerViewPos;
                 origin.rotation = Quaternion.LookRotation(look);
             }
             if (prom != null) prom.showDebug = true;
@@ -1005,9 +1157,11 @@ public static class NeuroshelfAnimCapture
             {
                 var c = prom.transform.position + Vector3.up * 1.35f;
                 var toPlayer = NeuroshelfAnimationSetup.PlayerViewPos - prom.transform.position; toPlayer.y = 0;
-                var side = Quaternion.Euler(0, -35f, 0) * toPlayer.normalized;
-                promoCamPos = prom.transform.position + side * 2.1f + Vector3.up * 1.55f;
-                promoCamLook = c + Quaternion.Euler(0, -60f, 0) * toPlayer.normalized * 0.45f;
+                // камера чуть левее линии «промоутер → игрок»: рука с товарами — справа от него,
+                // в кадре видны и лицо, и вытянутая рука, и продвигаемый стеллаж за ней
+                var side = Quaternion.Euler(0, 8f, 0) * toPlayer.normalized;
+                promoCamPos = prom.transform.position + side * 1.6f + Vector3.up * 1.95f;   // ось прохода, над головами
+                promoCamLook = c + Quaternion.Euler(0, 50f, 0) * toPlayer.normalized * 0.35f;
             }
         });
 
@@ -1043,11 +1197,13 @@ public static class NeuroshelfAnimCapture
             if (cam != null)
                 Shot("08_Вид_от_первого_лица_1.65м", cam.transform.position, cam.transform.position + cam.transform.forward, cam.fieldOfView > 1 ? cam.fieldOfView : 60f);
             if (door != null) door.SetOpen(false);
+            if (prom != null) prom.showDebug = false;   // к контрольному кадру отладочные куб и луч скрыты
             if (ctx != null && condC != null) ctx.SetCondition(condC);
         });
 
         Add(30f, "условие C", () =>
         {
+            if (prom != null) prom.showDebug = false;
             Shot("09_Контроль_условие_C_без_толпы", new Vector3(0.9f, 2.45f, 1.05f), new Vector3(-1.4f, 0.9f, -1.0f), 62f);
             CrowdProto("условие C (через 20 с после переключения)");
             if (prom != null) Proto.AppendLine($"Промоутер в условии C: вес IK {prom.armIK.weight:F2} (ожидается 0 — жест выключен)");
@@ -1091,6 +1247,8 @@ public static class NeuroshelfAnimCapture
     {
         if (p == null) return;
         p.Measure(out var dist, out var err);
+        Proto.AppendLine($"  [диагн.] active={p.dbgActive} near={p.dbgNear} dist={p.dbgDist:F2} product={p.dbgProduct} " +
+                         $"скрипт ставит вес {p.dbgSetWeight:F2} (прочитал в Update {p.dbgUpdateRead:F2}, в LateUpdate {p.dbgLateRead:F2}), цель {p.dbgSetTarget:F2}; слой жеста {p.animator.GetLayerWeight(1):F2}; RigBuilder enabled={p.GetComponent<RigBuilder>()?.enabled}, graph={p.GetComponent<RigBuilder>()?.graph.IsValid()}");
         Proto.AppendLine($"IK, цель {label}: вес {p.armIK.weight:F2}; кисть — цель IK {dist * 100f:F1} см; " +
                          $"отклонение руки от направления на товар {err:F1}°; позиция цели {p.ikTarget.position:F2}");
     }
@@ -1107,13 +1265,21 @@ public static class NeuroshelfAnimCapture
             if (!s.IsBrowsing) walking++;
         }
         Proto.AppendLine($"Толпа, {label}: у продвигаемого стеллажа {at} из {shoppers.Length}, в пути {walking}");
+        foreach (var s in shoppers)
+        {
+            var an = s.animator; var st = an.GetCurrentAnimatorStateInfo(0);
+            Proto.AppendLine($"  [диагн.] {s.name}: enabled={an.enabled} avatar={(an.avatar ? an.avatar.name : "—")} valid={an.avatar && an.avatar.isValid} " +
+                             $"ctrl={(an.runtimeAnimatorController ? an.runtimeAnimatorController.name : "—")} playables={an.hasBoundPlayables} " +
+                             $"state={(st.IsName("Idle") ? "Idle" : st.IsName("Walk") ? "Walk" : "?")} t={st.normalizedTime:F2} cull={an.cullingMode} " +
+                             $"leftHandY={an.GetBoneTransform(HumanBodyBones.LeftHand).position.y:F2} same={an.gameObject == s.gameObject}");
+        }
     }
 
     static Vector3 DoorCam(ProximityDoor d, out Vector3 look)
     {
         var t = d.transform;
         look = t.position + Vector3.up * 1.0f + t.forward * 0.2f;
-        return t.position + t.forward * 2.3f + t.right * 0.9f + Vector3.up * 1.45f;
+        return t.position + t.forward * 2.3f - t.right * 1.0f + Vector3.up * 1.45f;   // со стороны петель
     }
 
     static Vector3 StandCam(AdStandMotion s, out Vector3 look)

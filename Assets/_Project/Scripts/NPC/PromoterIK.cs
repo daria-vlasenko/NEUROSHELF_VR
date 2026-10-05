@@ -9,6 +9,7 @@ using UnityEngine.Animations.Rigging;
 //   3) правая рука указывает на продвигаемый товар — Two Bone IK Constraint.
 // Цель IK не задана руками: она каждый кадр вычисляется из текущего условия эксперимента
 // (ExperimentContext → promotedProduct). Сменили условие — рука сама показывает на другой товар.
+// Вес ограничений плавно меняет Animator Controller (слой «IK Weights»), а не этот скрипт.
 public class PromoterIK : MonoBehaviour
 {
     [Header("Ссылки (заполняет NEUROSHELF → Анимация)")]
@@ -22,7 +23,6 @@ public class PromoterIK : MonoBehaviour
     public float noticeDistance = 4.5f;
     public float maxBodyToProductAngle = 75f;
     public float turnSpeed = 120f;      // град/с
-    public float blendSpeed = 2.5f;     // скорость нарастания веса IK, 1/с
     [Range(0.8f, 1f)] public float reach = 0.97f;   // доля длины руки: почти прямая рука
     public bool showDebug;              // куб-цель IK и луч от кисти к товару (для кадров)
     public Transform playerOverride;
@@ -37,6 +37,15 @@ public class PromoterIK : MonoBehaviour
     bool hasOffset, wasNear;
     ExperimentContext ctx;
     Renderer targetRenderer;
+
+    // диагностика для протокола
+    [NonSerialized] public bool dbgNear, dbgActive;
+    [NonSerialized] public float dbgDist, dbgSetWeight;
+    [NonSerialized] public string dbgProduct;
+    [NonSerialized] public Vector3 dbgSetTarget;
+    [NonSerialized] public float dbgUpdateRead, dbgLateRead;
+
+    void LateUpdate() { if (armIK != null) dbgLateRead = armIK.weight; }
 
     public Transform Hand => hand;
     public Transform Finger => finger;
@@ -53,8 +62,6 @@ public class PromoterIK : MonoBehaviour
         armLength = Vector3.Distance(shoulder.position, elbow.position) + Vector3.Distance(elbow.position, hand.position);
         ComputeHandOffset();
         if (ikTarget != null) targetRenderer = ikTarget.GetComponent<Renderer>();
-        if (armIK != null) armIK.weight = 0f;
-        if (headAim != null) headAim.weight = 0f;
         animator.SetLayerWeight(GestureLayer, 0f);
     }
 
@@ -93,6 +100,8 @@ public class PromoterIK : MonoBehaviour
         animator.SetBool(PlayerNear, near);
         if (near && !wasNear) animator.SetTrigger(PointTrigger);
         wasNear = near;
+        dbgActive = active; dbgNear = near; dbgProduct = product != null ? product.name : "null";
+        dbgDist = player != null ? Flat(player.position - transform.position).magnitude : -1f;
 
         // 1. Корпус к игроку, не дальше допустимого угла от товара
         if (near)
@@ -122,11 +131,10 @@ public class PromoterIK : MonoBehaviour
             ikHint.position = s + dir * armLength * 0.5f - transform.up * 0.25f + transform.right * 0.2f;
         }
 
-        // 4. Вес IK растёт плавно, синхронно со слоем жеста
-        float target = near ? 1f : 0f;
-        float w = Mathf.MoveTowards(armIK.weight, target, blendSpeed * Time.deltaTime);
-        armIK.weight = w;
-        headAim.weight = Mathf.MoveTowards(headAim.weight, near ? 0.85f : 0f, blendSpeed * Time.deltaTime);
+        // 4. Вес IK задаёт сам Animator (слой «IK Weights», параметр PlayerNear, переход 0.4 с).
+        //    Здесь только синхронизируем с ним вес слоя жеста (пальцы из клипа Point).
+        float w = armIK.weight;
+        dbgUpdateRead = w; dbgSetWeight = w; dbgSetTarget = ikTarget.position;
         animator.SetLayerWeight(GestureLayer, w);
 
         if (targetRenderer != null) targetRenderer.enabled = showDebug;
