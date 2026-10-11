@@ -87,11 +87,19 @@ Maps: `Albedo` (sRGB), `Normal`, and `MetallicSmoothness` — metallic in RGB, s
 
 ## Tooling
 
-Two scripts replace the manual click-work and make the asset pipeline reproducible.
+Editor scripts replace the manual click-work and make every stage reproducible from a menu.
 
 **`NEUROSHELF_Blender_LR2.py`** — builds 12 packaging models at real dimensions, runs Smart UV Project with a 0.01 island margin on each, packs every unwrap into its assigned atlas cell by UV arithmetic, and exports a single FBX with a selection filter.
 
 **`NeuroshelfMaterialSetup.cs`** — an Editor menu that sets correct import settings per texture (sRGB for colour, linear for data, Normal Map type, Clamp wrap for atlas safety), builds the URP Lit material, wires the maps into the right slots, applies it across a hierarchy, and reports material and renderer counts for draw-call analysis.
+
+**`NeuroshelfLightingSetup.cs`** — light rig, static flags, lightmap bake on CPU, light probes, before/after renders and an FPS probe.
+
+**`NeuroshelfAnimationSetup.cs`** — Humanoid rigs, vertex-weight verification, Animator Controllers, Two Bone IK promoter, NavMesh shoppers, mesh simplification.
+
+**`NeuroshelfInteractionSetup.cs`** — collision layers, product physics and grab setup, Near-Far hands, shelf and basket sockets, an automated Play Mode scenario with pass/fail checks, and a Unity Recorder capture.
+
+**`NeuroshelfRemote.cs`** — a file-based bridge that lets an external agent run Editor menu items and read the console, so the whole pipeline runs without clicking.
 
 ---
 
@@ -122,6 +130,43 @@ Two decisions carry the design.
 
 ---
 
+## Interaction
+
+![Grabbing from the bottom tier, ray-pulling from eye level, basket and throw](docs/interaction.gif)
+
+*Recorded with Unity Recorder from the shopper's eyes. Poses are scripted (no headset); the grabbing, ray pull, sockets, throw and physics are stock XR Interaction Toolkit components.*
+
+Taking a product off the shelf **is** the recorded decision. The tier heights only become a measurable cost of access once reaching for a product is an action: the 1.60 m tier is a straight reach, the 0.60 m tier requires bending — and the bend shows up in the data as a drop in head height.
+
+| Element | Implementation |
+|---|---|
+| Hands | **Near-Far Interactor** (XRI 3.3.2) on both controllers: a 0.10 m sphere caster for grabbing by hand, a 6 m curve caster for the ray. Unity positions it as the replacement for the XRI 2.x Direct + Ray pair; one component means no arbitration between two interactors and a single `Near/Far` field in the data |
+| Products | 12 × `XR Grab Interactable` with primitive colliders only (Capsule for bottles, Box for cans and cartons) — zero Mesh Colliders in the scene |
+| Attach points | Bottle by the neck (85% height), carton by the centre of the front face, can by the body |
+| Physics | Mass and drag per packaging: PET bottle 0.53 kg / drag 0.05, can 0.35 kg / 0.05, carton 0.15–0.45 kg / 0.35. Launched identically, the carton lands 0.15 m short of the bottle and stops 1 m sooner |
+| Throw | Smoothing 0.20 s, velocity scale **1.0** (XRI default is 1.5): a measurement instrument should not exaggerate throws. Measured: the product leaves at 95–98% of hand speed |
+| Basket | 6 socket slots, follows the shopper at waist height, turns only when the body turns > 35°. *Placed in basket = purchased* |
+| Shelf slots | Every product sits in its own planogram socket. *Returned to its slot* and *dropped on the floor* are separate events |
+| Collision layers | `Products × NPC` disabled; the ray ignores NPCs; both layers excluded from NavMesh baking so a dropped carton never becomes a wall for shoppers |
+
+### Interaction events
+
+`Select Entered` / `Select Exited` on every product feed `ProductInteractionHub` — the extension point the session recorder will subscribe to. Each event carries product ID, tier, hand, near/far, head and hand height, hold time, release speed and outcome:
+
+```
+PICK     GRANO  tier=0 (0.60 м) Right from=Shelf via=Near dist=0.04 м head=1.28 м hand=0.76 м
+RELEASE  GRANO  tier=0 (0.60 м) Right held=2.42 с … → Purchased
+PICK     VOLTA  tier=2 (1.60 м) Right from=Shelf via=Far  dist=1.63 м head=1.65 м hand=1.49 м
+RELEASE  VOLTA  tier=2 (1.60 м) Right held=2.64 с … → Returned
+RELEASE  KRISP  tier=1 (1.10 м) Right held=1.56 с v_item=2.69 м/с v_hand=2.77 м/с → Thrown
+```
+
+A methodological note: a ray that can grab the bottom tier erases the cost of bending — the very variable the eye-level effect depends on. Every event records `via=Near/Far`, and each product has an `allowFarGrab` switch (an `IXRSelectFilter`) to disable the ray for clean runs.
+
+Verified in Play Mode by an automated scenario: **19 of 19 checks pass**. Median frame with all interaction active: 6.82 ms (147 FPS) on Intel Arc integrated graphics.
+
+---
+
 ## Running without a headset
 
 No HTC Vive on hand, so the project runs on the **XR Device Simulator** from the XR Interaction Toolkit samples. The interaction logic is real; only the input source is substituted.
@@ -131,9 +176,11 @@ Open `Assets/_Project/Scenes/02_Store.unity`, press Play. Keyboard layout must b
 | Key | Action |
 |---|---|
 | `Tab` | Cycle: head → left controller → right controller |
-| `W A S D` | Move |
-| Mouse | Look / aim |
-| `Shift` / `Space` | Down / up |
+| `W A S D`, `Q` / `E` | Move, down / up |
+| Right mouse button + mouse | Look |
+| Hold `Left Shift` / `Space` | Move the left / right controller with the mouse |
+| `G` | Grip — grab and release |
+| Left mouse button | Trigger |
 
 ### Eye-height calibration
 
@@ -151,10 +198,12 @@ Worth knowing before touching the XR Origin: tier heights are experimental param
 |---|---|---|
 | **1** | Environment, blockout geometry, scene hierarchy, XR foundation | ✅ Done |
 | **2** | UV pipeline, texture atlas, PBR materials, Editor tooling | ✅ Done |
-| 3 | Lighting architecture, lightmap baking, VR performance budget | In progress |
-| 4 | Shopper agents, skeletal animation, procedural IK | Planned |
-| 5 | Grab, ray and socket interaction | Planned |
-| 6 | Analytics layer, CSV export, debrief room | Planned |
+| **3** | Lighting architecture, lightmap baking, light probes, VR performance budget | ✅ Done |
+| **4** | Shopper agents, skeletal animation, procedural IK | ✅ Done |
+| **5** | Grab, ray and socket interaction, interaction events | ✅ Done |
+| 6 | Analytics layer, CSV export, debrief room | Next |
+
+Part one — the store as a measurable environment — is complete. Part two turns the interaction events into session data.
 
 ---
 
