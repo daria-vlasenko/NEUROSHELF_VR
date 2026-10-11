@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 40a40b5a2df3c4a4fa98921c19aa712a, type: 3}
+  m_Name: LP_Smooth_Continuous
+  m_EditorClassIdentifier: Assembly-CSharp::LocomotionProfileSO
+  profileName: Smooth_Continuous
+  description: "\u041A\u0430\u043A Smooth_Snap, \u043D\u043E \u043F\u043B\u0430\u0432\u043D\u044B\u0439
+    \u043F\u043E\u0432\u043E\u0440\u043E\u0442 60 \xB0/\u0441: \u0435\u0441\u0442\u0435\u0441\u0442\u0432\u0435\u043D\u043D\u0435\u0435,
+    \u0441\u0438\u043B\u044C\u043D\u0435\u0435 \u043F\u0440\u043E\u0432\u043E\u0446\u0438\u0440\u0443\u0435\u0442
+    \u0443\u043A\u0430\u0447\u0438\u0432\u0430\u043D\u0438\u0435 \u2014 \u0432\u0438\u043D\u044C\u0435\u0442\u043A\u0430
+    \u0440\u0435\u0430\u0433\u0438\u0440\u0443\u0435\u0442 \u0438 \u043D\u0430 \u043F\u043E\u0432\u043E\u0440\u043E\u0442."
+  mode: 1
+  moveSpeed: 1.4
+  strafe: 1
+  turn: 1
+  snapAngle: 45
+  continuousTurnSpeed: 60
+  curveVelocity: 8.5
+  curveAcceleration: 9.8
+  freeFloorTeleport: 1
+  vignette: 1
+  vignetteStrength: 1
+  minAperture: 0.7
+  vignetteVerticalShift: -0.12
+  linearSpeedRange: {x: 0.1, y: 1.4}
+  angularSpeedRange: {x: 10, y: 90}
+  vignetteSmoothing: 0.15
+  basketOffset: {x: -0.22, y: 0.42}
+  basketHeight: 0.95
+  logInterval: 0.2

@@ -212,6 +212,9 @@ public class InteractionDemoDriver : MonoBehaviour
     {
         var top = basket.position + Vector3.up * 0.30f;
         var gripOff = it.Grip.position - it.transform.position;
+        // с ЛР6 корзина вынесена вперёд, в нижнее поле зрения: руку сначала поднимаем над бортом, потом ведём к корзине
+        var lift = rightCtl.position; lift.y = Mathf.Max(lift.y, top.y + gripOff.y);
+        yield return Move(0.4f, (rightCtl, lift, rightCtl.rotation));
         yield return Move(0.9f, (rightCtl, top + gripOff, it.Grip.rotation));
         yield return new WaitForSeconds(0.25f);
         rBtn.Set(false);

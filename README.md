@@ -49,6 +49,7 @@ Stated plainly, because this is a measurement instrument and its boundaries matt
 - **No true eye tracking.** Head direction is recorded as a coarse proxy. A participant can move their eyes without turning their head — the metric is *head-gaze*, not eye-gaze.
 - **No olfactory channel.** Scent marketing cannot be reproduced in VR.
 - **No physiological signals.** EEG and GSR are out of scope, though the analytics layer is event-driven and accepts additional sources without modification.
+- **Locomotion bias.** Teleport removes the walk to distant shelves; smooth locomotion keeps it but risks motion sickness. Neither reproduces real walking, so the mode is recorded as a factor and distance is logged in parts — the comparison estimates the bias, it does not remove it.
 - **Headset-free development.** Built and tested on the XR Device Simulator; see below for the calibration this required.
 
 ---
@@ -167,6 +168,39 @@ Verified in Play Mode by an automated scenario: **19 of 19 checks pass**. Median
 
 ---
 
+## Locomotion
+
+![Teleport to the far shelf, then smooth walking with a speed-driven vignette](docs/locomotion.gif)
+
+*Recorded with Unity Recorder from the shopper's eyes at a 90° vertical field of view. Poses and stick input are scripted (no headset); moving, turning, teleporting, collision and the vignette are stock XR Interaction Toolkit 3.3.2 components.*
+
+Here locomotion is not a comfort setting: it is part of the measurement, and a source of bias. The shopper's route — distance walked, time at each shelf, order of visits — is a recorded metric, and the way people move changes it:
+
+- **Teleport** removes the walk to the far shelf. A product there becomes as accessible as one nearby, and part of the placement effect (the cost of access) disappears.
+- **Smooth locomotion** keeps distance real but can cause motion sickness, and a sick participant no longer behaves like a shopper.
+
+So both are implemented, and the choice is an experimental parameter rather than a preference. A `LocomotionProfileSO` asset sets mode, speed, turn type and vignette strength, and its name is written into every route file. The design becomes 2 × 2: shelf condition (A / C) × locomotion mode. Comparing the modes on distance and dwell time is itself a result: it shows how much the navigation method distorts the measurement.
+
+| Element | Implementation |
+|---|---|
+| Teleport | `Teleport Interactor` with a Projectile curve, v = 8.5 m/s, g = 9.8 m/s²: maximum range 8.4 m from hand height, inside the 12 × 8 m hall (the XRI default v = 16 reaches 27 m and makes aiming uncontrollable) |
+| Landing rule | Floor only. A target is valid only if it lies on the **NavMesh already baked for the shopper agents** and does not overlap an NPC capsule — no second walkability system. A rejected target turns the curve yellow and the reticle crossed |
+| Anchors | One per shelf and one at the checkout, 1.0 m from the shelf edge, landing facing the shelf. Every participant gets the same viewpoint, and all three tiers are in view at once. Anchors are placed clear of the shopper standing spots, so the crowd at the promoted shelf does not lock it for teleporting users |
+| Smooth | `ContinuousMoveProvider` at **1.4 m/s**, average adult walking speed, so metres walked stay comparable with a real store |
+| Turning | Snap 45° or continuous 60°/s, switchable |
+| Vignette | Stock `TunnelingVignetteController`, with aperture driven every frame by a custom `ITunnelingVignetteProvider`: zero at rest, rising with artificial linear (0.1–1.4 m/s) and angular (10–90°/s) speed, capped at 0.70. Head motion in room-scale and instant jumps (teleport, snap) never trigger it |
+| Rest frame | The shopping basket, moved into the lower field of view and locked to the XR Origin so it does not lag while walking. A diegetic rest frame instead of an overlaid grid: it does not cover the shelves and does not remind the participant that they are in an experiment |
+| Player collider | `CharacterController`, r = 0.25 m, height driven by the camera. It is what keeps the 0.60 m tier costly: without it the shopper simply drives into the shelf (tested — the camera ends up 0.43 m inside) |
+| Route log | Head position every 0.2 s, teleport events, zone entry/exit, dwell per shelf; console and CSV. Distance is split into `physical_m` (feet), `smooth_m` (stick) and `teleport_m` (jumped) so the two modes stay comparable |
+
+XRI 3.x renamed the locomotion stack, and most guides still describe 2.x: `LocomotionSystem` → `LocomotionMediator` + `XRBodyTransformer`, `ActionBasedContinuousMoveProvider` → `ContinuousMoveProvider`, `CharacterControllerDriver` → `XRBodyTransformer.useCharacterControllerIfExists`. The 2.x classes are still shipped, marked `[Obsolete]`.
+
+Verified in Play Mode by an automated scenario: **39 of 39 checks pass** — eye height stays at 1.650 m with the collider, measured walking speed 1.400 m/s, vignette thresholds, collision stop at 0.28 m from the shelf edge, valid and rejected teleport targets. Median frame while walking with the vignette: 5.79 ms (173 FPS), 1.7% of frames over the 11.1 ms budget.
+
+Motion sickness itself was **not** measured: there was no headset and no participants. What is verified are objective proxies — the comfort measures fire at the intended thresholds and the frame rate stays within budget.
+
+---
+
 ## Running without a headset
 
 No HTC Vive on hand, so the project runs on the **XR Device Simulator** from the XR Interaction Toolkit samples. The interaction logic is real; only the input source is substituted.
@@ -201,7 +235,8 @@ Worth knowing before touching the XR Origin: tier heights are experimental param
 | **3** | Lighting architecture, lightmap baking, light probes, VR performance budget | ✅ Done |
 | **4** | Shopper agents, skeletal animation, procedural IK | ✅ Done |
 | **5** | Grab, ray and socket interaction, interaction events | ✅ Done |
-| 6 | Analytics layer, CSV export, debrief room | Next |
+| **6** | Teleport and smooth locomotion as an experimental factor, comfort, player collider, route log | ✅ Done |
+| 7 | Analytics layer, CSV export, debrief room | Next |
 
 Part one — the store as a measurable environment — is complete. Part two turns the interaction events into session data.
 
