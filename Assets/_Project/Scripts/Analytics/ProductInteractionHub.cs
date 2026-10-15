@@ -37,6 +37,8 @@ public struct ProductInteractionEvent
     public float handHeight;         // высота руки в момент события
     public float distance;           // расстояние рука — товар при взятии
     public ReleaseOutcome outcome;
+    public string state;             // состояние сценария в момент события (SessionStamp)
+    public int run;                  // номер захода: 0 — вне захода, 1 — A, 2 — C
 
     public override string ToString()
     {
@@ -75,9 +77,11 @@ public static class ProductInteractionHub
     public static void Raise(ProductInteractionEvent e)
     {
         e.time = Time.time;
+        e.state = SessionStamp.State;
+        e.run = SessionStamp.Run;
         if (History.Count >= 512) History.RemoveAt(0);
         History.Add(e);
-        if (logToConsole) Debug.Log("[NS-INT] " + e);
+        if (logToConsole) Debug.Log("[NS-INT] " + e + (string.IsNullOrEmpty(e.state) ? "" : "  [" + SessionStamp.Tag + "]"));
         try { Raised?.Invoke(e); }
         catch (Exception ex) { Debug.LogException(ex); }
     }

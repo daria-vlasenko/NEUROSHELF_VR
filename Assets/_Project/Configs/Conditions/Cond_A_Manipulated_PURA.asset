@@ -23,3 +23,4 @@ MonoBehaviour:
   crowdShareAtPromo: 0.85
   promoterPointing: 1
   adStandMotion: 1
+  planogram: {fileID: 11400000, guid: 4ac4149531f8f7746be98f1b55e49a60, type: 2}

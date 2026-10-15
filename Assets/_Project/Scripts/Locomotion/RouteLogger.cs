@@ -66,7 +66,7 @@ public class RouteLogger : MonoBehaviour
         var cond = ExperimentContext.Find()?.condition;
         csv.Clear();
         csv.AppendLine($"# NEUROSHELF route · {DateTime.Now:yyyy-MM-dd HH:mm:ss} · profile={profile?.profileName} · mode={profile?.mode} · turn={profile?.turn} · speed={(profile != null ? profile.moveSpeed : 0f).ToString("0.00", ci)} · condition={cond?.conditionName}");
-        csv.AppendLine("t,event,head_x,head_y,head_z,yaw,zone,physical_m,smooth_m,teleport_m,detail");
+        csv.AppendLine("t,event,head_x,head_y,head_z,yaw,zone,physical_m,smooth_m,teleport_m,detail,state,run");
     }
 
     void OnDisable()
@@ -127,8 +127,9 @@ public class RouteLogger : MonoBehaviour
     void Sample(float t, string ev, string detail)
     {
         var h = head.position;
-        csv.AppendLine(string.Format(ci, "{0:0.000},{1},{2:0.000},{3:0.000},{4:0.000},{5:0.0},{6},{7:0.000},{8:0.000},{9:0.000},\"{10}\"",
-            t, ev, h.x, h.y, h.z, head.eulerAngles.y, currentZone, physicalMeters, smoothMeters, teleportMeters, detail));
+        // state и run — метка сценария (SessionStamp): по ним данные захода A отделяются от C
+        csv.AppendLine(string.Format(ci, "{0:0.000},{1},{2:0.000},{3:0.000},{4:0.000},{5:0.0},{6},{7:0.000},{8:0.000},{9:0.000},\"{10}\",{11},{12}",
+            t, ev, h.x, h.y, h.z, head.eulerAngles.y, currentZone, physicalMeters, smoothMeters, teleportMeters, detail, SessionStamp.State, SessionStamp.Run));
     }
 
     void Log(string s)

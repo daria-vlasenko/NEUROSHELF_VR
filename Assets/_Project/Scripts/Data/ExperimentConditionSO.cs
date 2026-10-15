@@ -22,4 +22,7 @@ public class ExperimentConditionSO : ScriptableObject
 
     [Header("Движение рекламного стенда (захват внимания движением)")]
     public bool adStandMotion = true;
+
+    [Header("Планограмма и цены (сценарий: смена A → C = смена планограммы)")]
+    public PlanogramSO planogram;
 }

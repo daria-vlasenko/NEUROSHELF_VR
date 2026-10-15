@@ -121,7 +121,18 @@ public class LocomotionRig : MonoBehaviour
         Debug.Log($"[NS-LOC] Профиль {p.profileName}: режим {p.mode}, {p.moveSpeed:0.00} м/с, поворот {p.turn}, виньетка {(p.vignette ? p.vignetteStrength.ToString("0.00") : "выкл")}");
     }
 
-    public void SetProfile(LocomotionProfileSO p) { profile = p; Apply(); }
+    /// Сторож смены профиля. Сценарий фиксирует профиль на всю сессию (A и C должны идти одним способом
+    /// перемещения) и ставит сюда проверку; false — смена отклонена. Без сценария сторожа нет.
+    public static System.Func<LocomotionProfileSO, bool> ChangeGuard;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetGuard() { ChangeGuard = null; }
+
+    public void SetProfile(LocomotionProfileSO p)
+    {
+        if (ChangeGuard != null && !ChangeGuard(p)) return;
+        profile = p; Apply();
+    }
 
     // Максимальная дальность кривой Projectile по горизонтали со старта на высоте h (без сопротивления):
     // R = v²/g · (sinθcosθ + cosθ·√(sin²θ + 2gh/v²)), максимум ищем перебором угла.
