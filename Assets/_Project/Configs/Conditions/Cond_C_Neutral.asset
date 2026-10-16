@@ -24,3 +24,8 @@ MonoBehaviour:
   promoterPointing: 0
   adStandMotion: 0
   planogram: {fileID: 11400000, guid: 1c6c72ff4ad3580478cf2a0b35561e26, type: 2}
+  backgroundMusic: 0
+  musicClip: {fileID: 0}
+  musicTempoBpm: 0
+  audioAnchorShelf: 
+  tierEffortHaptic: 0

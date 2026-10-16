@@ -84,3 +84,6 @@ desktop.ini
 /Assets/_Project/Art/Characters/Mixamo.meta
 /Assets/_Project/Art/Characters/Simplified/
 /Assets/_Project/Art/Characters/Simplified.meta
+
+# пакет-источник Steam Audio: распакованные файлы лежат в Assets/Plugins/SteamAudio
+ThirdParty/*.unitypackage

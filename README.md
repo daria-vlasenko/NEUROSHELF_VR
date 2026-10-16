@@ -36,7 +36,8 @@ Each is an independent module, toggled through an experiment-condition asset. Co
 | Decoy effect | Three sizes where the middle exists only to sell the largest | Huber, Payne & Puto (1982) |
 | Scarcity & urgency | "3 left" tags, countdown timers on promo stands | Worchel, Lee & Adewole (1975) |
 | Social proof | NPC shoppers cluster at the promoted shelf | Cialdini (1984) |
-| Music priming | Background soundtrack shifts category preference | North, Hargreaves & McKendrick (1999) |
+| Music priming | Background soundtrack on/off and tempo are fields of the experiment condition | North, Hargreaves & McKendrick (1999) · Milliman (1982) |
+| Spatial sound anchor | A jingle at a chosen shelf, occluded by the racks; time to first approach is logged per shelf | — (hypothesis tested here) |
 | Mere exposure | Brand logo shown *N* times before the shelf is reached | Zajonc (1968) |
 | Lighting accent | Warm 3000K over impulse zone, cold 5000K over markdowns | Experimental variable |
 
@@ -236,7 +237,9 @@ Worth knowing before touching the XR Origin: tier heights are experimental param
 | **4** | Shopper agents, skeletal animation, procedural IK | ✅ Done |
 | **5** | Grab, ray and socket interaction, interaction events | ✅ Done |
 | **6** | Teleport and smooth locomotion as an experimental factor, comfort, player collider, route log | ✅ Done |
-| 7 | Analytics layer, CSV export, debrief room | Next |
+| **7** | Experiment scenario as a state machine, trigger zones, run-tagged analytics, in-store debrief board | ✅ Done |
+| **8** | Spatial audio (Steam Audio HRTF, occlusion, reverb zones), diegetic world-space UI, haptics with an impulse log | ✅ Done |
+| 9 | Debrief room as a separate scene, participant study | Next |
 
 Part one — the store as a measurable environment — is complete. Part two turns the interaction events into session data.
 
@@ -248,7 +251,11 @@ All third-party resources are **CC0**. Attribution is given as a matter of pract
 
 [Kenney](https://kenney.nl/assets) · [Quaternius](https://quaternius.itch.io/) · [Poly Haven](https://polyhaven.com/textures) · [ambientCG](https://ambientcg.com/)
 
-Original to this project: all packaging models, the texture atlas and every map in it, label design, and both automation scripts.
+Original to this project: all packaging models, the texture atlas and every map in it, label design, and the automation scripts.
+
+**Audio.** Every sound in the store — music, cooler hum, ventilation, footsteps, murmur, checkout, door, UI clicks and the sound anchor — is synthesised by `Tools/synth_audio.py` (numpy/scipy, fixed seeds). No recorded third-party audio is used.
+
+**Spatialiser.** [Steam Audio 4.8.1](https://github.com/ValveSoftware/steam-audio) by Valve, Apache License 2.0 — Windows x64 binaries only, in `Assets/Plugins/SteamAudio/`. Its third-party notices are in `ThirdParty/SteamAudio_THIRDPARTY.md`.
 
 ---
 
@@ -262,3 +269,5 @@ Original to this project: all packaging models, the texture atlas and every map 
 6. North, A. C., Hargreaves, D. J., & McKendrick, J. (1999). The influence of in-store music on wine selections. *Journal of Applied Psychology*, 84(2), 271–276.
 7. Zajonc, R. B. (1968). Attitudinal effects of mere exposure. *JPSP*, 9(2, Pt.2), 1–27.
 8. Meißner, M., Pfeiffer, J., Pfeiffer, T., & Oppewal, H. (2019). Combining virtual reality and mobile eye tracking for shopper research. *Journal of Business Research*, 100, 445–458.
+9. Milliman, R. E. (1982). Using Background Music to Affect the Behavior of Supermarket Shoppers. *Journal of Marketing*, 46(3), 86–91.
+10. Blauert, J. (1997). *Spatial Hearing: The Psychophysics of Human Sound Localization*. MIT Press.

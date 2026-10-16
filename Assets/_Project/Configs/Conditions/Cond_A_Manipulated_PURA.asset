@@ -24,3 +24,8 @@ MonoBehaviour:
   promoterPointing: 1
   adStandMotion: 1
   planogram: {fileID: 11400000, guid: 4ac4149531f8f7746be98f1b55e49a60, type: 2}
+  backgroundMusic: 1
+  musicClip: {fileID: 8300000, guid: 581fdd34c39acaa4198d3f35a1677af3, type: 3}
+  musicTempoBpm: 64
+  audioAnchorShelf: Shelf_03
+  tierEffortHaptic: 0

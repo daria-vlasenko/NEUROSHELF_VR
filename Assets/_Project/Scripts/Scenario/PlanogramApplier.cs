@@ -19,7 +19,7 @@ public class PlanogramApplier : MonoBehaviour
 {
     public ExperimentContext context;
     public Transform priceTagRoot;
-    public Material tagMaterial;          // URP Unlit — цвет задаётся MaterialPropertyBlock
+    public Material tagMaterial;          // не используется с ЛР8: ценник — холст PriceTagUI (поле оставлено для совместимости сцены)
     [Tooltip("Z кромки полок со стороны прохода (ценники)")]
     public float shelfEdgeZ = -1.19f;
     public Color tagColor = new Color(0.96f, 0.96f, 0.93f);
@@ -34,9 +34,10 @@ public class PlanogramApplier : MonoBehaviour
     readonly Dictionary<string, PriceTag> tags = new Dictionary<string, PriceTag>();
     static readonly CultureInfo ci = CultureInfo.InvariantCulture;
 
+    // Ценник — World Space Canvas (PriceTagUI, ЛР8). Раньше это был куб с текстом; содержимое и правила те же.
     class PriceTag
     {
-        public Transform root; public Renderer back; public Text name, price, anchor; public GameObject strike;
+        public Transform root; public PriceTagUI ui;
         public float highlightUntil; public Color baseColor;
     }
 
@@ -132,63 +133,22 @@ public class PlanogramApplier : MonoBehaviour
         t.root.position = new Vector3(pos.x, pos.y - PlanogramSO.BoardHalf - 0.045f, shelfEdgeZ * side);
         t.root.rotation = Quaternion.Euler(0f, side > 0f ? 180f : 0f, 0f);
         bool anchor = price != null && price.anchorPrice > 0f;
-        t.price.text = price != null ? price.price.ToString("0.00", ci) : "—";
-        t.anchor.text = anchor ? price.anchorPrice.ToString("0.00", ci) : "";
-        t.strike.SetActive(anchor);
+        t.ui.SetData(price != null ? price.price : 0f, anchor ? price.anchorPrice : 0f);
         t.baseColor = anchor ? tagAnchorColor : tagColor;
-        WorldText.Tint(t.back, t.baseColor, mpb);
+        t.ui.SetColor(t.baseColor);
     }
 
     PriceTag BuildTag(string id)
     {
-        var root = priceTagRoot.Find("Tag_" + id);
-        if (root == null)
-        {
-            root = new GameObject("Tag_" + id).transform;
-            root.SetParent(priceTagRoot, false);
-        }
-        var back = root.Find("Back");
-        if (back == null)
-        {
-            var g = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            g.name = "Back"; Destroy(g.GetComponent<Collider>());
-            back = g.transform; back.SetParent(root, false);
-            if (tagMaterial != null) g.GetComponent<Renderer>().sharedMaterial = tagMaterial;
-        }
-        back.localPosition = new Vector3(0f, 0f, 0.004f);
-        back.localScale = new Vector3(0.11f, 0.065f, 0.006f);
-        var cv = WorldText.Canvas(root, "Canvas", new Vector2(0.11f, 0.065f), Vector3.zero, 8f);
-        var t = new PriceTag
-        {
-            root = root, back = back.GetComponent<Renderer>(),
-            name = WorldText.Label(cv.transform, "Name", new Rect(4, 2, 102, 18), 14, TextAnchor.UpperLeft, FontStyle.Bold),
-            price = WorldText.Label(cv.transform, "Price", new Rect(36, 22, 70, 40), 30, TextAnchor.LowerRight, FontStyle.Bold),
-            anchor = WorldText.Label(cv.transform, "Anchor", new Rect(4, 34, 40, 22), 15, TextAnchor.MiddleLeft),
-        };
-        t.name.text = id;
-        foreach (var tx in new[] { t.name, t.price, t.anchor }) tx.color = new Color(0.08f, 0.08f, 0.1f);
-        t.anchor.color = new Color(0.55f, 0.1f, 0.1f);
-        var strike = root.Find("Strike");
-        if (strike == null)
-        {
-            var g = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            g.name = "Strike"; Destroy(g.GetComponent<Collider>());
-            strike = g.transform; strike.SetParent(root, false);
-            g.GetComponent<Renderer>().sharedMaterial = t.back.sharedMaterial;
-        }
-        // поверх старой цены: центр поля Anchor (x 4…44 мм, y 34…56 мм от левого верхнего угла 110 × 65 мм)
-        strike.localPosition = new Vector3(-0.031f, -0.0125f, -0.0015f);
-        strike.localScale = new Vector3(0.036f, 0.0025f, 0.001f);
-        WorldText.Tint(strike.GetComponent<Renderer>(), new Color(0.75f, 0.1f, 0.1f), mpb);
-        t.strike = strike.gameObject;
-        return t;
+        var ui = PriceTagUI.Build(priceTagRoot, id);
+        return new PriceTag { root = ui.transform, ui = ui };
     }
 
     void OnProduct(ProductInteractionEvent e)
     {
         if (e.type != ProductEventType.Picked || !tags.TryGetValue(e.productId, out var t)) return;
         t.highlightUntil = Time.time + highlightSeconds;
-        WorldText.Tint(t.back, highlightColor, mpb);
+        t.ui.SetColor(highlightColor);
     }
 
     void Update()
@@ -197,10 +157,12 @@ public class PlanogramApplier : MonoBehaviour
             if (t.highlightUntil > 0f && Time.time > t.highlightUntil)
             {
                 t.highlightUntil = 0f;
-                WorldText.Tint(t.back, t.baseColor, mpb);
+                t.ui.SetColor(t.baseColor);
             }
     }
 
     public bool IsHighlighted(string productId) => tags.TryGetValue(productId, out var t) && t.highlightUntil > Time.time;
     public Transform TagOf(string productId) => tags.TryGetValue(productId, out var t) ? t.root : null;
+    public PriceTagUI TagUI(string productId) => tags.TryGetValue(productId, out var t) ? t.ui : null;
+    public IEnumerable<PriceTagUI> AllTags => tags.Values.Select(t => t.ui);
 }

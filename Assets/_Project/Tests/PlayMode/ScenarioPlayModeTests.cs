@@ -8,6 +8,9 @@ using UnityEngine.TestTools;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
+using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
+using UnityEngine.XR.Interaction.Toolkit.UI;
+using UnityEngine.EventSystems;
 
 // Автотесты сценария в Play Mode. Каждый тест загружает рабочую сцену 02_Store заново.
 // Условия выставляются настоящими источниками: телепорт в зону (перестановка XR Origin),
@@ -337,5 +340,370 @@ public class ScenarioPlayModeTests
         Assert.AreSame(locked, sc.rig.profile, "прямое присваивание откатано");
         Assert.AreEqual(2, sc.ProfileChangeAttempts);
         Assert.AreEqual(ScenarioState.RunA, sc.State);
+    }
+
+    // =====================================================================================
+    // ЛР8 — звук, интерфейсы, вибрация. Категория LR8. Звук и вибрация проверяются по данным
+    // (параметрам источников, значению окклюзии Steam Audio, журналу импульсов), а не на слух.
+    // =====================================================================================
+
+    HandRoleArbiter Arb => Object.FindFirstObjectByType<HandRoleArbiter>();
+    StoreAudioDirector Dir => StoreAudioDirector.Instance;
+    XRCanvasButton CanvasOf(ScenarioButton b) => Object.FindObjectsByType<ScenarioCanvasButton>(FindObjectsSortMode.None).First(x => x.logic == b).view;
+
+    IEnumerator AimAt(Transform h, InteractorHandedness hand, XRCanvasButton b, int frames = 40)
+    {
+        var target = UIFeedback.Center(b.transform);
+        for (int i = 0; i < frames && !b.HoveredBy(hand); i++)
+        {
+            h.rotation = Quaternion.LookRotation(target - h.position, Vector3.up);
+            yield return null;
+        }
+        yield return null; yield return null;
+    }
+
+    IEnumerator AimAway(Transform h)
+    {
+        h.localRotation = Quaternion.Euler(70f, 0f, 0f);
+        for (int i = 0; i < 5; i++) yield return null;
+    }
+
+    IEnumerator RayPress(NearFarInteractor i, Transform h, XRCanvasButton b)
+    {
+        i.uiPressInput.inputSourceMode = XRInputButtonReader.InputSourceMode.ManualValue;
+        yield return AimAt(h, i.handedness, b);
+        i.uiPressInput.QueueManualState(true, 1f, true, false);
+        yield return null; yield return null;
+        i.uiPressInput.QueueManualState(false, 0f, false, true);
+        yield return null; yield return null;
+        i.uiPressInput.QueueManualState(false, 0f, false, false);
+    }
+
+    [UnityTest, Category("LR8")]
+    public IEnumerator Audio_Listener_IsSingle_OnXRCamera_AtEyeHeight()
+    {
+        var ls = Object.FindObjectsByType<AudioListener>(FindObjectsSortMode.None);
+        TestContext.WriteLine($"Audio Listener: {ls.Length} шт. на {string.Join(", ", ls.Select(l => l.name))}; камера {xr.Camera.name} y={head.position.y:0.000}, Camera Y Offset {xr.CameraYOffset:0.00}");
+        Assert.AreEqual(1, ls.Length, "слушатель должен быть один");
+        Assert.AreSame(xr.Camera.gameObject, ls[0].gameObject, "слушатель — на камере XR Origin");
+        Assert.AreEqual(1.65f, xr.CameraYOffset, 0.001f, "Camera Y Offset не сброшен");
+        Assert.AreEqual("Steam Audio Spatializer", AudioSettings.GetSpatializerPluginName());
+        yield return null;
+    }
+
+    [UnityTest, Category("LR8")]
+    public IEnumerator Audio_Music_IsConditionFactor_OnInA_OffInC()
+    {
+        yield return new WaitForSeconds(0.5f);
+        Assert.IsTrue(sc.conditionA.backgroundMusic && sc.conditionA.musicClip != null, "в условии A музыка — поле условия");
+        Assert.IsFalse(sc.conditionC.backgroundMusic, "в условии C музыки нет");
+        Assert.IsTrue(Dir.music.isPlaying && Dir.MusicOn, "A: музыка играет");
+        Assert.AreEqual(sc.conditionA.audioAnchorShelf, Dir.AnchorShelf);
+        sc.context.SetCondition(sc.conditionC);
+        yield return new WaitForSeconds(Dir.fadeSeconds + 0.3f);
+        TestContext.WriteLine($"C: музыка играет={Dir.music.isPlaying}, якорь «{Dir.AnchorShelf}»");
+        Assert.IsFalse(Dir.music.isPlaying, "C: музыка остановлена после затухания");
+        Assert.AreEqual("", Dir.AnchorShelf, "C: якоря нет");
+        sc.context.SetCondition(sc.conditionA);
+        yield return new WaitForSeconds(0.3f);
+        Assert.IsTrue(Dir.music.isPlaying, "снова A — музыка вернулась");
+    }
+
+    [UnityTest, Category("LR8")]
+    public IEnumerator Audio_Sources_MatchSpecTable()
+    {
+        yield return null;
+        var all = Object.FindObjectsByType<StoreAudioSource>(FindObjectsSortMode.None);
+        foreach (var s in all)
+        {
+            var a = s.Source;
+            TestContext.WriteLine($"{s.sourceId,-22} blend={a.spatialBlend:0.00} {s.CurveName,-15} {a.minDistance:0.0}–{a.maxDistance:0.0} м группа={a.outputAudioMixerGroup?.name} HRTF={s.Binaural} окклюзия={s.OcclusionEnabled} reverbMix={a.reverbZoneMix:0.00} приоритет={a.priority}");
+            Assert.IsNotNull(a.outputAudioMixerGroup, s.sourceId + ": нет группы микшера");
+            Assert.AreEqual(s.group.ToString(), a.outputAudioMixerGroup.name, s.sourceId);
+            switch (s.role)
+            {
+                case StoreAudioSource.Role.Music: Assert.Less(a.spatialBlend, 0.05f); break;
+                case StoreAudioSource.Role.Anchor:
+                    Assert.AreEqual(1f, a.spatialBlend); Assert.AreEqual(AudioRolloffMode.Logarithmic, a.rolloffMode);
+                    Assert.IsTrue(s.Binaural && s.OcclusionEnabled, "якорь — HRTF и окклюзия");
+                    Assert.LessOrEqual(a.reverbZoneMix, 0.35f, "у якоря реверберация снижена"); break;
+                case StoreAudioSource.Role.Cooler:
+                    Assert.That(a.spatialBlend, Is.InRange(0.6f, 0.85f)); Assert.AreEqual(AudioRolloffMode.Custom, a.rolloffMode);
+                    Assert.LessOrEqual(a.maxDistance, 5f, "гул не расползается по залу"); break;
+                case StoreAudioSource.Role.Ventilation:
+                    Assert.That(a.spatialBlend, Is.InRange(0.6f, 0.85f)); Assert.AreEqual(AudioRolloffMode.Linear, a.rolloffMode); break;
+                case StoreAudioSource.Role.Checkout:
+                case StoreAudioSource.Role.Door:
+                case StoreAudioSource.Role.Interface:
+                    Assert.AreEqual(1f, a.spatialBlend); Assert.IsTrue(s.Binaural, s.sourceId + ": HRTF"); break;
+                case StoreAudioSource.Role.NpcSteps:
+                case StoreAudioSource.Role.NpcMurmur:
+                    Assert.LessOrEqual(a.maxDistance, 6f); Assert.GreaterOrEqual(a.priority, 200); Assert.IsFalse(a.spatialize, "NPC — без HRTF (экономия процессора)"); break;
+            }
+        }
+        Assert.Greater(all.Length, 10);
+        Assert.Less(Dir.anchor.reverbZoneMix, Object.FindObjectsByType<StoreAudioSource>(FindObjectsSortMode.None).First(x => x.role == StoreAudioSource.Role.Checkout).Source.reverbZoneMix);
+    }
+
+    [UnityTest, Category("LR8")]
+    public IEnumerator Audio_Mixer_ExposedParams_ChangeFromScenarioAndPanel_LockedDuringRun()
+    {
+        var m = StoreAudioMixer.Instance;
+        foreach (StoreAudioMixer.Group g in System.Enum.GetValues(typeof(StoreAudioMixer.Group)))
+            Assert.IsFalse(float.IsNaN(m.GetVolumeDb(g)), "открытый параметр " + StoreAudioMixer.Param(g));
+        Assert.IsTrue(m.SetVolumeDb(StoreAudioMixer.Group.Stimulus, -6f, "сценарий (тест)"));
+        Assert.AreEqual(-6f, m.GetVolumeDb(StoreAudioMixer.Group.Stimulus), 0.01f);
+        var panel = Object.FindFirstObjectByType<AudioSettingsPanel>();
+        var row = panel.rows.First(r => r.group == StoreAudioMixer.Group.Stimulus);
+        yield return null;
+        Assert.IsFalse(panel.Locked);
+        Assert.IsTrue(row.plus.Activate(InteractorHandedness.Left), "до захода панель работает");
+        Assert.AreEqual(-3f, m.GetVolumeDb(StoreAudioMixer.Group.Stimulus), 0.01f);
+        yield return StartRunA();
+        yield return null;
+        Assert.IsTrue(panel.Locked, "во время захода панель заблокирована");
+        int j0 = HapticFeedback.Journal.Count;
+        Assert.IsFalse(row.plus.Activate(InteractorHandedness.Left), "нажатие — отказ");
+        Assert.AreEqual(-3f, m.GetVolumeDb(StoreAudioMixer.Group.Stimulus), 0.01f, "громкость стимула не изменилась");
+        yield return new WaitForSeconds(0.3f);
+        var deny = HapticFeedback.Journal.Skip(j0).Where(r => r.pattern == "UIDeny").ToList();
+        Assert.AreEqual(2, deny.Count, "отказ — двойной импульс");
+        Assert.IsTrue(deny.All(r => r.hand == "Left"));
+        m.SetVolumeDb(StoreAudioMixer.Group.Stimulus, 0f, "тест: вернуть");
+    }
+
+    [UnityTest, Category("LR8")]
+    public IEnumerator Audio_Anchor_OccludedBehindShelf()
+    {
+        var a = Dir.anchor.GetComponent<StoreAudioSource>();
+        yield return Teleport(new Vector3(-1.2f, 0f, 0.1f));
+        yield return new WaitForSeconds(0.6f);
+        float front = a.Occlusion;
+        yield return Teleport(new Vector3(-1.2f, 0f, 2.6f));
+        yield return new WaitForSeconds(0.6f);
+        float behind = a.Occlusion;
+        TestContext.WriteLine($"окклюзия якоря Shelf_03: в проходе {front:0.00}, за стеллажом Shelf_01 {behind:0.00} ({20f * Mathf.Log10(Mathf.Max(behind, 1e-3f)):0.0} дБ прямого звука)");
+        Assert.Greater(front, 0.9f, "в прямой видимости не перекрыт");
+        Assert.Less(behind, 0.5f, "за стеллажом перекрыт");
+    }
+
+    [UnityTest, Category("LR8")]
+    public IEnumerator Audio_ReverbZones_CoverRoute_WithBlendedTransitions()
+    {
+        yield return null;
+        var zones = Object.FindObjectsByType<AudioReverbZone>(FindObjectsSortMode.None);
+        Assert.AreEqual(3, zones.Length);
+        foreach (var z in zones) Assert.Greater(z.maxDistance, z.minDistance, z.name + ": есть полоса перехода");
+        var route = new[] { Zone("Entry").transform.position, Zone("StartMark").transform.position, Zone("Shelf_03").transform.position, Zone("Shelf_04").transform.position, Zone("Checkout").transform.position, new Vector3(0f, 1.5f, 0f) };
+        foreach (var p in route)
+        {
+            var cover = zones.Where(z => Vector2.Distance(new Vector2(p.x, p.z), new Vector2(z.transform.position.x, z.transform.position.z)) < z.maxDistance).Select(z => z.name).ToList();
+            TestContext.WriteLine($"({p.x:0.0}; {p.z:0.0}) → {string.Join(", ", cover)}");
+            Assert.IsNotEmpty(cover, "точка маршрута без реверберации");
+        }
+        var hall = zones.First(z => z.name.Contains("Hall")); var chk = zones.First(z => z.name.Contains("Checkout"));
+        float d = Vector2.Distance(new Vector2(hall.transform.position.x, hall.transform.position.z), new Vector2(chk.transform.position.x, chk.transform.position.z));
+        Assert.Less(d, hall.maxDistance + chk.maxDistance, "зоны зала и кассы перекрываются — переход плавный");
+    }
+
+    [UnityTest, Category("LR8")]
+    public IEnumerator UI_PriceTags_AreCanvases_FromPlanogram_AnchorOnlyInA()
+    {
+        yield return null;
+        var applier = Object.FindFirstObjectByType<PlanogramApplier>();
+        var plan = sc.conditionA.planogram;
+        int n = 0;
+        foreach (var t in applier.AllTags)
+        {
+            var c = t.GetComponent<Canvas>();
+            Assert.AreEqual(RenderMode.WorldSpace, c.renderMode);
+            Assert.AreEqual(0.001f, t.transform.lossyScale.x, 1e-5f, "1 px = 1 мм");
+            Assert.IsNull(t.GetComponent<TrackedDeviceGraphicRaycaster>(), "ценник пассивный");
+            var id = t.nameText.text;
+            Assert.AreEqual(plan.PriceOf(id).price.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), t.PriceShown, id);
+            Assert.AreEqual(plan.PriceOf(id).anchorPrice > 0f, t.HasAnchor, id);
+            n++;
+        }
+        Assert.AreEqual(12, n);
+        Assert.IsTrue(applier.TagUI("VOLTA").HasAnchor, "A: у VOLTA якорная цена");
+        sc.context.SetCondition(sc.conditionC);
+        yield return null;
+        Assert.IsFalse(applier.AllTags.Any(t => t.HasAnchor), "C: ни одной якорной цены");
+        TestContext.WriteLine($"ценников {n}; в A якорь у VOLTA «{sc.conditionA.planogram.PriceOf("VOLTA").anchorPrice:0.00}», в C — нет ни у одного");
+    }
+
+    [UnityTest, Category("LR8")]
+    public IEnumerator UI_InteractiveCanvases_HaveTrackedDeviceRaycaster_AndXRUIModule()
+    {
+        yield return null;
+        var es = Object.FindFirstObjectByType<EventSystem>();
+        Assert.IsNotNull(es); Assert.IsNotNull(es.GetComponent<XRUIInputModule>(), "XR UI Input Module");
+        var buttons = Object.FindObjectsByType<XRCanvasButton>(FindObjectsSortMode.None);
+        Assert.GreaterOrEqual(buttons.Length, 12);
+        foreach (var b in buttons)
+        {
+            var c = b.GetComponentInParent<Canvas>();
+            Assert.AreEqual(RenderMode.WorldSpace, c.renderMode, b.id);
+            Assert.IsNotNull(c.GetComponent<TrackedDeviceGraphicRaycaster>(), b.id + ": нет Tracked Device Graphic Raycaster");
+            Assert.IsNotNull(b.GetComponentInParent<UIFeedback>(), b.id + ": нет звука холста");
+        }
+    }
+
+    [UnityTest, Category("LR8")]
+    public IEnumerator UI_RayHover_RealPipeline_HandRoles_WhileHoldingProduct()
+    {
+        yield return MakeReady();
+        var arb = Arb; var left = arb.uiHand; var lh = GameObject.Find("Left Controller").transform;
+        foreach (var c in lh.GetComponents<Behaviour>()) if (c.GetType().Name == "TrackedPoseDriver") c.enabled = false;
+        lh.localPosition = new Vector3(-0.22f, -0.45f, 0.30f); lh.localRotation = Quaternion.Euler(70f, 0f, 0f);
+        hand.localRotation = Quaternion.Euler(70f, 0f, 0f);
+        var b = CanvasOf(sc.startButton);
+        yield return AimAt(hand, InteractorHandedness.Right, b);
+        Assert.IsTrue(b.HoveredBy(InteractorHandedness.Right), "луч правой руки навёлся через XR UI Input Module");
+        yield return AimAway(hand);
+        Assert.IsFalse(b.HoveredBy(InteractorHandedness.Right));
+
+        // правая берёт товар → её UI-луч выключен, интерфейс у левой
+        var it = GameObject.Find("Can_ZEST").GetComponent<ProductItem>();
+        mgr.SelectEnter((IXRSelectInteractor)nf, (IXRSelectInteractable)it.GetComponent<XRGrabInteractable>());
+        yield return null; yield return null;
+        Assert.IsFalse(arb.ProductHandUI, "правая держит товар — UI-луч выключен");
+        yield return AimAt(hand, InteractorHandedness.Right, b, 20);
+        Assert.IsFalse(b.HoveredBy(InteractorHandedness.Right), "правая с товаром по интерфейсу не работает");
+        yield return AimAt(lh, InteractorHandedness.Left, b);
+        Assert.IsTrue(b.HoveredBy(InteractorHandedness.Left), "левая наводится на кнопку");
+        TestContext.WriteLine("роли рук: " + string.Join(" | ", arb.Journal));
+        mgr.SelectExit((IXRSelectInteractor)nf, (IXRSelectInteractable)it.GetComponent<XRGrabInteractable>());
+        yield return null; yield return null;
+        Assert.IsTrue(arb.ProductHandUI, "отпустила — UI-луч правой снова включён");
+    }
+
+    [UnityTest, Category("LR8")]
+    public IEnumerator UI_RayPress_StartsRun_AndUnavailableGivesDoubleDeny()
+    {
+        yield return MakeReady();
+        int j0 = HapticFeedback.Journal.Count;
+        var start = CanvasOf(sc.startButton);
+        var fb = start.GetComponentInParent<UIFeedback>();
+        int p0 = fb.Played;
+        yield return RayPress(nf, hand, start);
+        Assert.AreEqual(ScenarioState.RunA, sc.State, "нажатие лучом по холсту запустило заход");
+        Assert.Greater(fb.Played, p0, "щелчок прозвучал");
+        Assert.Less(Vector3.Distance(fb.LastPosition, UIFeedback.Center(start.transform)), 0.01f, "звук идёт от кнопки на холсте");
+        Assert.IsTrue(fb.Source.spatialize && fb.Source.spatialBlend > 0.99f, "звук интерфейса — через спатиалайзер");
+        var resume = CanvasOf(sc.resumeButton);
+        int d0 = resume.Denials;
+        yield return AimAway(hand);
+        yield return RayPress(nf, hand, resume);
+        yield return new WaitForSeconds(0.3f);
+        Assert.AreEqual(d0 + 1, resume.Denials, "недоступная кнопка — отказ");
+        var rec = HapticFeedback.Journal.Skip(j0).ToList();
+        TestContext.WriteLine(string.Join("\n", rec.Select(r => r.ToString())));
+        Assert.IsTrue(rec.Any(r => r.pattern == "UIHover" && r.hand == "Right"));
+        Assert.IsTrue(rec.Any(r => r.pattern == "UIPress" && r.hand == "Right"));
+        Assert.AreEqual(2, rec.Count(r => r.pattern == "UIDeny" && r.hand == "Right"), "двойной отказной импульс");
+    }
+
+    [UnityTest, Category("LR8")]
+    public IEnumerator Haptics_Grab_AmplitudeByMass_BasketClick_OnActingHand()
+    {
+        yield return StartRunA();
+        yield return Teleport(Zone("Shelf_03").transform.position);
+        int j0 = HapticFeedback.Journal.Count;
+        yield return Buy("Can_VOLTA");
+        yield return Buy("Bottle_PURA");
+        var grabs = HapticFeedback.Journal.Skip(j0).Where(r => r.pattern == "Grab").ToList();
+        var places = HapticFeedback.Journal.Skip(j0).Where(r => r.pattern == "BasketPlace").ToList();
+        TestContext.WriteLine(string.Join("\n", HapticFeedback.Journal.Skip(j0).Select(r => r.ToString())));
+        float mV = GameObject.Find("Can_VOLTA").GetComponent<Rigidbody>().mass, mP = GameObject.Find("Bottle_PURA").GetComponent<Rigidbody>().mass;
+        Assert.AreEqual(2, grabs.Count);
+        Assert.Less(mV, mP);
+        Assert.Less(grabs[0].amplitude, grabs[1].amplitude, "тяжелее — сильнее");
+        Assert.IsTrue(grabs.All(r => r.hand == "Right"), "вибрирует рука, которой взяли");
+        Assert.AreEqual(2, places.Count, "щелчок на каждый товар в корзине");
+        Assert.IsTrue(places.All(r => r.hand == "Right" && r.duration < grabs[0].duration));
+    }
+
+    [UnityTest, Category("LR8")]
+    public IEnumerator Haptics_TierEffort_OffByDefault_OnlyWithConditionFlag()
+    {
+        yield return StartRunA();
+        yield return Teleport(Zone("Shelf_03").transform.position);
+        int j0 = HapticFeedback.Journal.Count;
+        yield return Buy("Bottle_AURA");      // нижний ярус 0.60 м в условии A
+        var g = HapticFeedback.Journal.Skip(j0).First(r => r.pattern == "Grab" || r.pattern == "TierEffort");
+        Assert.AreEqual("Grab", g.pattern, "по умолчанию метки усилия нет");
+        var cond = Object.Instantiate(sc.conditionA);
+        cond.tierEffortHaptic = true;
+        HapticFeedback.Journal.Clear();
+        var it = GameObject.Find("Bottle_AURA").GetComponent<ProductItem>();
+        var gi = (IXRSelectInteractable)it.GetComponent<XRGrabInteractable>();
+        var ctx = sc.context; var saved = ctx.condition;
+        ctx.condition = cond;    // только флаг, без перестановки планограммы
+        mgr.SelectEnter((IXRSelectInteractor)nf, gi);
+        yield return new WaitForSeconds(0.2f);
+        ctx.condition = saved;
+        var e = HapticFeedback.Journal.First();
+        TestContext.WriteLine($"с флагом условия: {e}");
+        Assert.AreEqual("TierEffort", e.pattern);
+        Assert.Greater(e.duration, g.duration, "длиннее обычного взятия");
+        mgr.SelectExit((IXRSelectInteractor)nf, gi);
+        yield return null;
+    }
+
+    [UnityTest, Category("LR8")]
+    public IEnumerator UI_WristMenu_ShowsOnlyWhenLookingAtWrist()
+    {
+        yield return Enter();
+        yield return TakeList();
+        var w = Object.FindFirstObjectByType<WristMenu>();
+        var lh = GameObject.Find("Left Controller").transform;
+        foreach (var c in lh.GetComponents<Behaviour>()) if (c.GetType().Name == "TrackedPoseDriver") c.enabled = false;
+        lh.localPosition = new Vector3(-0.05f, -0.30f, 0.33f); lh.localRotation = Quaternion.Euler(-20f, 0f, 0f);
+        head.localRotation = Quaternion.identity;
+        yield return new WaitForSeconds(0.4f);
+        float a0 = w.Alpha, g0 = w.GazeAngle;
+        head.localRotation = Quaternion.LookRotation(head.parent.InverseTransformDirection(w.transform.position - head.position), Vector3.up);
+        yield return new WaitForSeconds(0.4f);
+        TestContext.WriteLine($"взгляд вперёд: угол {g0:0}°, α={a0:0.00}; на запястье: угол {w.GazeAngle:0}°, лицом {w.Facing:0.00}, α={w.Alpha:0.00}");
+        Assert.Less(a0, 0.05f, "вперёд — меню скрыто");
+        Assert.Greater(w.Alpha, 0.95f, "на запястье — меню видно");
+        StringAssert.Contains("Бюджет", w.sum.text);
+        Assert.IsFalse(sc.shoppingList.GetComponentsInChildren<Renderer>().Any(r => r.enabled), "бумажный лист спрятан — список на часах");
+        head.localRotation = Quaternion.identity;
+    }
+
+    [UnityTest, Category("LR8")]
+    public IEnumerator Metric_AnchorFirstApproach_RecordedPerShelf_TwoSensors()
+    {
+        yield return StartRunA();
+        yield return new WaitForSeconds(0.3f);
+        yield return Teleport(Zone("Shelf_04").transform.position);
+        yield return new WaitForSeconds(0.6f);
+        yield return Teleport(Zone("Shelf_03").transform.position);
+        yield return new WaitForSeconds(0.6f);
+        yield return Teleport(Zone("Checkout").transform.position);
+        Assert.IsTrue(sc.finishButton.Press());
+        yield return null;
+        var rows = SoundAnchorMetric.Instance.Rows.Where(r => r.run == 1).ToList();
+        foreach (var r in rows) TestContext.WriteLine(SoundAnchorMetric.ToCsv(r));
+        Assert.AreEqual(4, rows.Count);
+        var s3 = rows.First(r => r.shelf == "Shelf_03"); var s4 = rows.First(r => r.shelf == "Shelf_04");
+        Assert.IsTrue(s3.hasAnchor && !s4.hasAnchor, "якорь отмечен у Shelf_03");
+        Assert.AreEqual(1, s4.rank); Assert.AreEqual(2, s3.rank);
+        Assert.Less(s4.tEnterZone, s3.tEnterZone);
+        Assert.GreaterOrEqual(s3.tEnterRoute, 0f, "второй датчик (RouteLogger) тоже зафиксировал вход");
+        Assert.IsTrue(rows.First(r => r.shelf == "Shelf_01").censored, "непосещённый стеллаж — цензурированное наблюдение");
+    }
+
+    [UnityTest, Category("LR8")]
+    public IEnumerator Audio_VoiceBudget_WithinRealVoiceLimit()
+    {
+        yield return new WaitForSeconds(2f);
+        var all = Object.FindObjectsByType<AudioSource>(FindObjectsSortMode.None);
+        int playing = all.Count(a => a.isPlaying);
+        int limit = AudioSettings.GetConfiguration().numRealVoices;
+        TestContext.WriteLine($"звучит {playing} из {all.Length} источников, лимит реальных голосов {limit}");
+        Assert.LessOrEqual(playing, limit);
     }
 }

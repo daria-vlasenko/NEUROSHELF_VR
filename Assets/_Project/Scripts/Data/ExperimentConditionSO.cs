@@ -25,4 +25,19 @@ public class ExperimentConditionSO : ScriptableObject
 
     [Header("Планограмма и цены (сценарий: смена A → C = смена планограммы)")]
     public PlanogramSO planogram;
+
+    [Header("Эффект 7 — музыка в зале (North, Hargreaves & McKendrick, 1999; Milliman, 1982)")]
+    [Tooltip("Фоновая музыка включена в этом условии")]
+    public bool backgroundMusic;
+    public AudioClip musicClip;
+    [Tooltip("Темп трека, уд/мин — для протокола и анализа (темп — отдельная переменная по Milliman, 1982)")]
+    public float musicTempoBpm;
+
+    [Header("Звуковой якорь — пространственный стимул у стеллажа")]
+    [Tooltip("Имя стеллажа, у которого звучит якорь (Shelf_03 …). Пусто — якоря нет.")]
+    public string audioAnchorShelf = "";
+
+    [Header("Тактильная метка усилия на нижнем ярусе 0.60 м")]
+    [Tooltip("По умолчанию выключено: в настоящем магазине такой метки нет, она смешалась бы с эффектом яруса.")]
+    public bool tierEffortHaptic;
 }

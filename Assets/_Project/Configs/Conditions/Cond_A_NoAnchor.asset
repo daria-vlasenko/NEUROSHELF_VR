@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9dc22d66f5409c741b158c1a20bef9cf, type: 3}
+  m_Name: Cond_A_NoAnchor
+  m_EditorClassIdentifier: Assembly-CSharp::ExperimentConditionSO
+  conditionName: A_NoAnchor
+  description: "\u0423\u0441\u043B\u043E\u0432\u0438\u0435 A \u0431\u0435\u0437 \u0437\u0432\u0443\u043A\u043E\u0432\u043E\u0433\u043E
+    \u044F\u043A\u043E\u0440\u044F. \u041A\u043E\u043D\u0442\u0440\u043E\u043B\u044C
+    \u043A Cond_A_Manipulated_VOLTA \u0438 Cond_A_AnchorShelf04."
+  promotedProduct: Can_VOLTA
+  promotedShelf: Shelf_03
+  socialProofCrowd: 1
+  crowdShareAtPromo: 0.85
+  promoterPointing: 1
+  adStandMotion: 1
+  planogram: {fileID: 11400000, guid: 4ac4149531f8f7746be98f1b55e49a60, type: 2}
+  backgroundMusic: 1
+  musicClip: {fileID: 8300000, guid: 581fdd34c39acaa4198d3f35a1677af3, type: 3}
+  musicTempoBpm: 64
+  audioAnchorShelf: 
+  tierEffortHaptic: 0
