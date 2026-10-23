@@ -7,7 +7,9 @@
         "UnityEditor.TestRunner",
         "Unity.XR.Interaction.Toolkit",
         "Unity.XR.CoreUtils",
-        "UnityEngine.UI"
+        "UnityEngine.UI",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

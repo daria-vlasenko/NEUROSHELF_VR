@@ -57,12 +57,26 @@ public static class WorldText
         return tx;
     }
 
+    // В игре цвет метки задаётся собственным экземпляром материала, а не MaterialPropertyBlock:
+    // рендерер с MaterialPropertyBlock несовместим с SRP Batcher и рисуется отдельным вызовом вне пакета
+    // (Frame Debugger: StartMarkDisc, Mark_Basket, Mark_List — событие «Mesh» вместо «SRP Batch»).
+    // Экземпляр того же шейдера SRP Batcher группирует с остальными. В редакторе (вне Play Mode) — как раньше,
+    // чтобы не менять общий материал-ассет.
+    static readonly int BaseColorId = Shader.PropertyToID("_BaseColor"), ColorId = Shader.PropertyToID("_Color");
     public static void Tint(Renderer r, Color c, MaterialPropertyBlock mpb)
     {
         if (r == null) return;
-        r.GetPropertyBlock(mpb);
-        mpb.SetColor("_BaseColor", c);
-        mpb.SetColor("_Color", c);
-        r.SetPropertyBlock(mpb);
+        if (!Application.isPlaying)
+        {
+            r.GetPropertyBlock(mpb);
+            mpb.SetColor("_BaseColor", c);
+            mpb.SetColor("_Color", c);
+            r.SetPropertyBlock(mpb);
+            return;
+        }
+        if (r.HasPropertyBlock()) r.SetPropertyBlock(null);
+        var m = r.material;
+        if (m.HasProperty(BaseColorId)) m.SetColor(BaseColorId, c);
+        if (m.HasProperty(ColorId)) m.SetColor(ColorId, c);
     }
 }

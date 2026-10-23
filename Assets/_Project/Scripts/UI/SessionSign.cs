@@ -20,17 +20,27 @@ public class SessionSign : MonoBehaviour
         t0 = Time.time;
     }
 
+    // Текст обновляется по событию — когда сменилась секунда, этап или заход, а не каждый кадр:
+    // раньше каждый кадр собирались три новые строки (выделение памяти в куче каждый кадр).
+    int lastSecond = -1, lastRun = -1; ScenarioState lastState; bool lastActive, lastDot, drawn;
+    public int Redraws { get; private set; }
+
     void Update()
     {
         var sc = ScenarioController.Instance;
-        if (title != null) title.text = "NEUROSHELF · сессия " + SessionId;
-        if (state != null) state.text = Phrase(sc);
-        if (meta != null)
+        int s = Mathf.FloorToInt(Time.time - t0);
+        int run = sc != null ? sc.Run : 1;
+        var st = sc != null ? sc.State : ScenarioState.WaitingForEntry;
+        bool active = sc != null && sc.Active;
+        if (!drawn || s != lastSecond || run != lastRun || st != lastState || active != lastActive)
         {
-            int s = Mathf.FloorToInt(Time.time - t0);
-            meta.text = $"Заход {(sc != null ? sc.Run : 1)} из 2   ·   {s / 60:00}:{s % 60:00}   ·   идёт запись поведения";
+            drawn = true; lastSecond = s; lastRun = run; lastState = st; lastActive = active; Redraws++;
+            if (title != null) title.text = "NEUROSHELF · сессия " + SessionId;
+            if (state != null) state.text = Phrase(sc);
+            if (meta != null) meta.text = $"Заход {run} из 2   ·   {s / 60:00}:{s % 60:00}   ·   идёт запись поведения";
         }
-        if (recDot != null) recDot.enabled = Mathf.Repeat(Time.time, 1.2f) < 0.8f;
+        bool dot = Mathf.Repeat(Time.time, 1.2f) < 0.8f;
+        if (recDot != null && dot != lastDot) { lastDot = dot; recDot.enabled = dot; }
     }
 
     public static string Phrase(ScenarioController sc)
